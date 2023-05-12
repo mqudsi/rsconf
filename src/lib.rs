@@ -15,6 +15,7 @@ type BoxedError = Box<dyn std::error::Error + Send + Sync + 'static>;
 pub struct Detector {
     compiler: Build,
     temp: TempDir,
+    verbose: bool,
 }
 
 macro_rules! snippet {
@@ -58,13 +59,25 @@ impl Detector {
             temp
         };
 
-        Ok(Self { compiler, temp })
+        Ok(Self {
+            compiler,
+            temp,
+            verbose: false,
+        })
+    }
+
+    /// Enables or disables verbose mode.
+    ///
+    /// In verbose mode, compiler output is displayed to stdout and stderr. It is not enabled by
+    /// default.
+    pub fn set_verbose(&mut self, verbose: bool) {
+        self.verbose = verbose;
     }
 
     fn new_temp(&self, ext: &str) -> PathBuf {
         let file_num = FILE_COUNTER.fetch_add(1, Ordering::Release);
         let mut path = self.temp.to_owned();
-        path.push(format!("rsconf-{file_num}{ext}"));
+        path.push(format!("test-{file_num}{ext}"));
         path
     }
 
@@ -76,9 +89,9 @@ impl Detector {
         let output = cmd
             .args([in_path.as_os_str(), OsStr::new("-o"), out_path.as_os_str()])
             .output()?;
-        if cfg!(debug_assertions) {
-            dbg!(String::from_utf8_lossy(&output.stdout));
-            dbg!(String::from_utf8_lossy(&output.stderr));
+        if self.verbose {
+            std::io::stdout().lock().write_all(&output.stdout).ok();
+            std::io::stderr().lock().write_all(&output.stderr).ok();
         }
         // Handle custom `CompilationError` output if we failed to compile.
         let _ = output_or_err(output)?;
@@ -96,9 +109,9 @@ impl Detector {
         let output = cmd
             .args([in_path.as_os_str(), OsStr::new("-o"), out_path.as_os_str()])
             .output()?;
-        if cfg!(debug_assertions) {
-            dbg!(String::from_utf8_lossy(&output.stdout));
-            dbg!(String::from_utf8_lossy(&output.stderr));
+        if self.verbose {
+            std::io::stdout().lock().write_all(&output.stdout).ok();
+            std::io::stderr().lock().write_all(&output.stderr).ok();
         }
         // Handle custom `CompilationError` output if we failed to compile.
         let _ = output_or_err(output)?;
@@ -117,11 +130,12 @@ impl Detector {
         let snippet = format!(snippet!("symbol_i32_value.c"), header, symbol);
         let exe = self.build_exe(&snippet)?;
 
-        // Panic if this fails because this would be our fault, not the user's.
-        let output = Command::new(exe)
-            .output()
-            .expect("Failed to run the executable that we built!");
-        dbg!(&output);
+        let output = Command::new(exe).output().map_err(|err| {
+            format!(
+                "Failed to run the test executable: {err}!\n{}",
+                "Note that symbol_i32_value() does not support cross-compilation!"
+            )
+        })?;
         Ok(std::str::from_utf8(&output.stdout)?.parse()?)
     }
 
@@ -129,18 +143,12 @@ impl Detector {
         let snippet = format!(snippet!("symbol_u32_value.c"), header, symbol);
         let exe = self.build_exe(&snippet)?;
 
-        // Panic if this fails because this would be our fault, not the user's.
-        let output = Command::new(exe)
-            .output()
-            .expect("Failed to run the executable that we built!");
-        Ok(std::str::from_utf8(&output.stdout)?.parse()?)
-    }
-
-    pub fn symbol_u64_value(&self, header: &str, symbol: &str) -> Result<u64, BoxedError> {
-        let snippet = format!(snippet!("symbol_u64_value.c"), header, symbol);
-        let exe = self.build_exe(&snippet)?;
-
-        let output = Command::new(exe).output()?;
+        let output = Command::new(exe).output().map_err(|err| {
+            format!(
+                "Failed to run the test executable: {err}!\n{}",
+                "Note that symbol_u32_value() does not support cross-compilation!"
+            )
+        })?;
         Ok(std::str::from_utf8(&output.stdout)?.parse()?)
     }
 
@@ -148,7 +156,25 @@ impl Detector {
         let snippet = format!(snippet!("symbol_i64_value.c"), header, symbol);
         let exe = self.build_exe(&snippet)?;
 
-        let output = Command::new(exe).output()?;
+        let output = Command::new(exe).output().map_err(|err| {
+            format!(
+                "Failed to run the test executable: {err}!\n{}",
+                "Note that symbol_i64_value() does not support cross-compilation!"
+            )
+        })?;
+        Ok(std::str::from_utf8(&output.stdout)?.parse()?)
+    }
+
+    pub fn symbol_u64_value(&self, header: &str, symbol: &str) -> Result<u64, BoxedError> {
+        let snippet = format!(snippet!("symbol_u64_value.c"), header, symbol);
+        let exe = self.build_exe(&snippet)?;
+
+        let output = Command::new(exe).output().map_err(|err| {
+            format!(
+                "Failed to run the test executable: {err}!\n{}",
+                "Note that symbol_u64_value() does not support cross-compilation!"
+            )
+        })?;
         Ok(std::str::from_utf8(&output.stdout)?.parse()?)
     }
 
@@ -183,7 +209,7 @@ impl TempDir {
 
         let mut rng = RandomState::new().build_hasher();
         rng.write(b"rsconf");
-        let rand = rng.finish();
+        let rand = rng.finish() as u32;
         let dir_name = format!(".rsconf-{rand}");
         let mut path = path.into();
         path.push(dir_name);
