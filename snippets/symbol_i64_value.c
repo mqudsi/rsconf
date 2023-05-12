@@ -3,6 +3,6 @@
 #include <{0}>
 
 int main() {{
-	fprintf(stdout, "%lld", (int64_t)({1}));
+	fprintf(stdout, "%lld", (long long)(int64_t)({1}));
 	return 0;
 }}
