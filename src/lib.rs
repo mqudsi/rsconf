@@ -5,10 +5,9 @@ use cc::Build;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::prelude::*;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicI32, Ordering};
-use tempfile::TempDir;
 
 static FILE_COUNTER: AtomicI32 = AtomicI32::new(0);
 type BoxedError = Box<dyn std::error::Error + Send + Sync + 'static>;
@@ -64,9 +63,9 @@ impl Detector {
 
     fn new_temp(&self, ext: &str) -> PathBuf {
         let file_num = FILE_COUNTER.fetch_add(1, Ordering::Release);
-        self.temp
-            .path()
-            .with_file_name(format!("rsconf-{file_num}{ext}"))
+        let mut path = self.temp.to_owned();
+        path.push(format!("rsconf-{file_num}{ext}"));
+        path
     }
 
     fn build(&self, code: &str) -> Result<PathBuf, BoxedError> {
@@ -168,5 +167,55 @@ impl Detector {
         let header = header.unwrap_or("stdio.h");
         let snippet = format!(snippet!("if.c"), header, condition);
         self.build(&snippet).is_ok()
+    }
+}
+
+/// A temporary directory deleted on `Drop`.
+struct TempDir {
+    path: PathBuf,
+}
+
+impl TempDir {
+    /// Tries to create a new temp directory as a child of the given directory.
+    pub fn new_in<P: Into<PathBuf>>(path: P) -> std::io::Result<Self> {
+        use std::collections::hash_map::RandomState;
+        use std::hash::{BuildHasher, Hasher};
+
+        let mut rng = RandomState::new().build_hasher();
+        rng.write(b"rsconf");
+        let rand = rng.finish();
+        let dir_name = format!(".rsconf-{rand}");
+        let mut path = path.into();
+        path.push(dir_name);
+
+        std::fs::create_dir_all(&path)?;
+
+        Ok(TempDir { path })
+    }
+
+    /// Tries to create a new temp directory in the system temporary directory.
+    pub fn new() -> std::io::Result<Self> {
+        let parent = std::env::temp_dir();
+        Self::new_in(parent)
+    }
+}
+
+impl std::ops::Deref for TempDir {
+    type Target = Path;
+
+    fn deref(&self) -> &Self::Target {
+        &self.path
+    }
+}
+
+impl AsRef<Path> for TempDir {
+    fn as_ref(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.path);
     }
 }
