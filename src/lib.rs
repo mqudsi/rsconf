@@ -2,7 +2,7 @@
 mod tests;
 
 use cc::Build;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
@@ -16,6 +16,8 @@ pub struct Detector {
     compiler: Build,
     temp: TempDir,
     verbose: bool,
+    /// Whether or not we are compiling with cl.exe (and not clang.exe) under xxx-pc-windows-msvc.
+    is_cl: bool,
 }
 
 macro_rules! snippet {
@@ -59,9 +61,12 @@ impl Detector {
             temp
         };
 
+        let is_cl = cfg!(windows) && compiler.get_compiler().is_like_msvc();
+
         Ok(Self {
             compiler,
             temp,
+            is_cl,
             verbose: false,
         })
     }
@@ -86,9 +91,14 @@ impl Detector {
         std::fs::File::create(&in_path)?.write_all(code.as_bytes())?;
         let out_path = self.new_temp(".o");
         let mut cmd = self.compiler.try_get_compiler()?.to_command();
-        let output = cmd
-            .args([in_path.as_os_str(), OsStr::new("-o"), out_path.as_os_str()])
-            .output()?;
+        let output = if cfg!(unix) || !self.is_cl {
+            cmd.args([in_path.as_os_str(), OsStr::new("-o"), out_path.as_os_str()])
+        } else {
+            let mut output = OsString::from("/out:");
+            output.push(&out_path);
+            cmd.args([in_path.as_os_str(), OsStr::new("/link"), &output])
+        }
+        .output()?;
         if self.verbose {
             std::io::stdout().lock().write_all(&output.stdout).ok();
             std::io::stderr().lock().write_all(&output.stderr).ok();
@@ -106,9 +116,14 @@ impl Detector {
         File::create(&in_path)?.write_all(code.as_bytes())?;
         let out_path = self.new_temp(".o");
         let mut cmd = self.compiler.try_get_compiler()?.to_command();
-        let output = cmd
-            .args([in_path.as_os_str(), OsStr::new("-o"), out_path.as_os_str()])
-            .output()?;
+        let output = if cfg!(unix) || !self.is_cl {
+            cmd.args([in_path.as_os_str(), OsStr::new("-o"), out_path.as_os_str()])
+        } else {
+            let mut output = OsString::from("/out:");
+            output.push(&out_path);
+            cmd.args([in_path.as_os_str(), OsStr::new("/link"), &output])
+        }
+        .output()?;
         if self.verbose {
             std::io::stdout().lock().write_all(&output.stdout).ok();
             std::io::stderr().lock().write_all(&output.stderr).ok();
