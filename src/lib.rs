@@ -224,6 +224,15 @@ impl TempDir {
         let parent = std::env::temp_dir();
         Self::new_in(parent)
     }
+
+    /// Convert the [`TmpDir`] instance into a [`PathBuf`], effectively suppressing the `Drop`
+    /// behavior (i.e. the directory will no longer be automatically deleted).
+    #[allow(unused)]
+    pub fn into_path(mut self) -> PathBuf {
+        let path = std::mem::replace(&mut self.path, PathBuf::new());
+        std::mem::forget(self);
+        path
+    }
 }
 
 impl std::ops::Deref for TempDir {
