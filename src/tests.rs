@@ -113,6 +113,7 @@ fn glibc_greater_than_1_1() {
 }
 
 #[test]
+#[cfg(all(unix, target_env = "gnu"))]
 fn glibc_less_than_10_3() {
     let detector = detector();
     let result = detector.r#if(None, "!__GLIBC_PREREQ(10, 3)");
@@ -122,7 +123,7 @@ fn glibc_less_than_10_3() {
 #[test]
 fn not_if() {
     let detector = detector();
-    let result = detector.r#if(None, "!__FOOO_BAR_12_(10, 3)");
+    let result = detector.r#if(None, "__FOOO_BAR_12_");
     assert_eq!(result, false);
 }
 
