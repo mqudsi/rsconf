@@ -125,3 +125,10 @@ fn not_if() {
     let result = detector.r#if(None, "!__FOOO_BAR_12_(10, 3)");
     assert_eq!(result, false);
 }
+
+#[test]
+fn if_true() {
+    let detector = detector();
+    let result = detector.r#if(None, "1");
+    assert_eq!(result, true);
+}
