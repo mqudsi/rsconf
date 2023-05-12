@@ -23,28 +23,40 @@ static CC: Lazy<cc::Build> = Lazy::new(|| {
     cc::Build::new()
 });
 
+/// Returns a [`Detector`] instance initialized with the default [`cc::Build`] instance returned by
+/// [`CC`](self::CC).
+static DETECTOR: Lazy<Detector> = Lazy::new(|| {
+    let mut detector = Detector::new(CC.clone()).unwrap();
+    detector.set_verbose(true);
+    detector
+});
+
+pub fn detector() -> &'static Detector {
+    &*DETECTOR
+}
+
 #[test]
 fn symbol_defined() {
-    let detector = Detector::new(CC.clone()).unwrap();
+    let detector = detector();
     assert_eq!(detector.symbol_is_defined("stdio.h", "struct FILE"), true);
 }
 
 #[test]
 #[cfg(target_os = "linux")]
 fn dir_defined() {
-    let detector = Detector::new(CC.clone()).unwrap();
+    let detector = detector();
     assert_eq!(detector.symbol_is_defined("dirent.h", "struct DIR"), true);
 }
 
 #[test]
 fn symbol_not_defined() {
-    let detector = Detector::new(CC.clone()).unwrap();
+    let detector = detector();
     assert_eq!(detector.symbol_is_defined("stdio.h", "DIR"), false);
 }
 
 #[test]
 fn valid_u32_value() {
-    let detector = Detector::new(CC.clone()).unwrap();
+    let detector = detector();
     let result = detector.symbol_u32_value("limits.h", "INT_MAX");
     assert_eq!(result.unwrap(), 2147483647);
 }
@@ -52,42 +64,42 @@ fn valid_u32_value() {
 #[test]
 #[cfg(target_os = "linux")]
 fn dirent_value() {
-    let detector = Detector::new(CC.clone()).unwrap();
+    let detector = detector();
     let result = detector.symbol_u32_value("dirent.h", "DT_FIFO");
     assert_eq!(result.unwrap(), 1);
 }
 
 #[test]
 fn valid_u64_value() {
-    let detector = Detector::new(CC.clone()).unwrap();
+    let detector = detector();
     let result = detector.symbol_u64_value("limits.h", "LLONG_MAX");
     assert_eq!(result.unwrap(), 9223372036854775807);
 }
 
 #[test]
 fn valid_i32_value() {
-    let detector = Detector::new(CC.clone()).unwrap();
+    let detector = detector();
     let result = detector.symbol_i32_value("limits.h", "INT_MIN");
     assert_eq!(result.unwrap(), i32::MIN);
 }
 
 #[test]
 fn invalid_i32_value() {
-    let detector = Detector::new(CC.clone()).unwrap();
+    let detector = detector();
     let result = detector.symbol_i32_value("limits.h", "LLONG_MAX");
     assert!(matches!(result, Err(_)));
 }
 
 #[test]
 fn has_header() {
-    let detector = Detector::new(CC.clone()).unwrap();
+    let detector = detector();
     let result = detector.has_header("stdint.h");
     assert_eq!(result, true);
 }
 
 #[test]
 fn not_has_header() {
-    let detector = Detector::new(CC.clone()).unwrap();
+    let detector = detector();
     let result = detector.has_header("f_oobar77.h");
     assert_eq!(result, false);
 }
@@ -95,21 +107,21 @@ fn not_has_header() {
 #[test]
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
 fn glibc_greater_than_1_1() {
-    let detector = Detector::new(CC.clone()).unwrap();
+    let detector = detector();
     let result = detector.r#if(None, "__GLIBC_PREREQ(1, 1)");
     assert_eq!(result, true);
 }
 
 #[test]
 fn glibc_less_than_10_3() {
-    let detector = Detector::new(CC.clone()).unwrap();
+    let detector = detector();
     let result = detector.r#if(None, "!__GLIBC_PREREQ(10, 3)");
     assert_eq!(result, true);
 }
 
 #[test]
 fn not_if() {
-    let detector = Detector::new(CC.clone()).unwrap();
+    let detector = detector();
     let result = detector.r#if(None, "!__FOOO_BAR_12_(10, 3)");
     assert_eq!(result, false);
 }
