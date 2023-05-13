@@ -202,6 +202,16 @@ impl Detector {
             .is_ok()
     }
 
+    /// Checks whether or not the the requested `symbol` is exported by `library`. This only checks
+    /// for symbols exported by the C abi (so mangled names are required) and does not check for
+    /// compile-time definitions provided by header files. See [`is_defined()`](Self::is_defined)
+    /// to check for compile-time definitions.
+    pub fn has_symbol(&self, library: &str, symbol: &str) -> bool {
+        let snippet = format!(snippet!("has_symbol.c"), symbol);
+        self.build(symbol, BuildMode::Executable, &snippet, Some(library))
+            .is_ok()
+    }
+
     /// Attempts to retrieve the definition of `ident` as an `i32` value. Returns `Ok` in case
     /// `ident` was defined, has a concrete value, is a compile-time constant (i.e. does not need to
     /// be linked to retrieve the value), and is a valid `i32` value.

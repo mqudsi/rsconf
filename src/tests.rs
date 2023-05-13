@@ -41,7 +41,7 @@ fn symbol_defined() {
 }
 
 #[test]
-#[cfg(target_os = "linux")]
+#[cfg(unix)]
 fn dir_defined() {
     let detector = detector();
     assert_eq!(detector.is_defined("dirent.h", "struct DIR"), true);
@@ -131,4 +131,43 @@ fn if_true() {
     let detector = detector();
     let result = detector.r#if(None, "1");
     assert_eq!(result, true);
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn has_library() {
+    let detector = detector();
+    let result = detector.has_library("pthread");
+    assert_eq!(result, true);
+}
+
+#[test]
+fn not_has_library() {
+    let detector = detector();
+    let result = detector.has_library("foo17_bar");
+    assert_eq!(result, false);
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn has_symbol() {
+    let detector = detector();
+    let result = detector.has_symbol("pthread", "pthread_create");
+    assert_eq!(result, true);
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn valid_library_invalid_symbol() {
+    let detector = detector();
+    let result = detector.has_symbol("pthread", "exhilarate");
+    assert_eq!(result, false);
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn invalid_library_no_symbol() {
+    let detector = detector();
+    let result = detector.has_symbol("zoonotico", "exhilarate");
+    assert_eq!(result, false);
 }
