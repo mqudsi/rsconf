@@ -196,8 +196,8 @@ impl Detector {
     /// Checks whether a definition for `ident` exists in the supplied `header`.
     ///
     /// This operation does not link the output; only the header file is inspected.
-    pub fn is_defined(&self, header: &str, ident: &str) -> bool {
-        let snippet = format!(snippet!("is_defined.c"), header, ident);
+    pub fn has_definition(&self, header: &str, ident: &str) -> bool {
+        let snippet = format!(snippet!("has_definition.c"), header, ident);
         self.build(ident, BuildMode::ObjectFile, &snippet, None)
             .is_ok()
     }

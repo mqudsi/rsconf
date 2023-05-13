@@ -37,20 +37,20 @@ pub fn detector() -> &'static Detector {
 #[test]
 fn symbol_defined() {
     let detector = detector();
-    assert_eq!(detector.is_defined("stdio.h", "struct FILE"), true);
+    assert_eq!(detector.has_definition("stdio.h", "struct FILE"), true);
 }
 
 #[test]
 #[cfg(unix)]
 fn dir_defined() {
     let detector = detector();
-    assert_eq!(detector.is_defined("dirent.h", "struct DIR"), true);
+    assert_eq!(detector.has_definition("dirent.h", "struct DIR"), true);
 }
 
 #[test]
 fn symbol_not_defined() {
     let detector = detector();
-    assert_eq!(detector.is_defined("stdio.h", "DIR"), false);
+    assert_eq!(detector.has_definition("stdio.h", "DIR"), false);
 }
 
 #[test]
