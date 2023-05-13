@@ -1,6 +1,5 @@
-use once_cell::sync::Lazy;
-
 use crate::Detector;
+use once_cell::sync::Lazy;
 
 static CC: Lazy<cc::Build> = Lazy::new(|| {
     // Set TARGET env var if not already set
