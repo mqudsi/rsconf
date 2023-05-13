@@ -119,8 +119,12 @@ impl Detector {
     ) -> Result<PathBuf, BoxedError> {
         let stub = Self::fs_sanitize(stub);
         let mut library = library.map(Cow::from);
-        // #[cfg(windows)]
-        if library.as_ref().map(|lib| !lib.contains('.')).unwrap_or(false) {
+        if cfg!(windows)
+            && library
+                .as_ref()
+                .map(|lib| !lib.contains('.'))
+                .unwrap_or(false)
+        {
             let owned = library.unwrap().into_owned() + ".lib";
             library = Some(Cow::from(owned));
         }
@@ -187,7 +191,8 @@ impl Detector {
     /// This operation does not link the output; only the header file is inspected.
     pub fn is_defined(&self, header: &str, ident: &str) -> bool {
         let snippet = format!(snippet!("is_defined.c"), header, ident);
-        self.build(ident, BuildMode::ObjectFile, &snippet, None).is_ok()
+        self.build(ident, BuildMode::ObjectFile, &snippet, None)
+            .is_ok()
     }
 
     /// Attempts to retrieve the definition of `ident` as an `i32` value. Returns `Ok` in case
@@ -278,7 +283,8 @@ impl Detector {
     /// named `header` file.
     pub fn has_header(&self, header: &str) -> bool {
         let snippet = format!(snippet!("has_header.c"), header);
-        self.build(header, BuildMode::ObjectFile, &snippet, None).is_ok()
+        self.build(header, BuildMode::ObjectFile, &snippet, None)
+            .is_ok()
     }
 
     /// Evaluates whether or not `define` is an extant preprocessor definition.
@@ -289,7 +295,8 @@ impl Detector {
     pub fn ifdef(&self, header: Option<&str>, define: &str) -> bool {
         let header = header.unwrap_or("stdio.h");
         let snippet = format!(snippet!("ifdef.c"), header, define);
-        self.build(define, BuildMode::ObjectFile, &snippet, None).is_ok()
+        self.build(define, BuildMode::ObjectFile, &snippet, None)
+            .is_ok()
     }
 
     /// Evaluates whether or not `condition` evaluates to true at preprocessor time.
@@ -300,7 +307,8 @@ impl Detector {
     pub fn r#if(&self, header: Option<&str>, condition: &str) -> bool {
         let header = header.unwrap_or("stdio.h");
         let snippet = format!(snippet!("if.c"), header, condition);
-        self.build(condition, BuildMode::ObjectFile, &snippet, None).is_ok()
+        self.build(condition, BuildMode::ObjectFile, &snippet, None)
+            .is_ok()
     }
 
     /// Returns whether or not it was possible to link against `library`.
@@ -317,7 +325,8 @@ impl Detector {
     /// to testing linking. (This way it works under under both `cl.exe` and `clang.exe`.)
     pub fn has_library(&self, library: &str) -> bool {
         let snippet = snippet!("empty.c");
-        self.build(library, BuildMode::Executable, snippet, Some(library)).is_ok()
+        self.build(library, BuildMode::Executable, snippet, Some(library))
+            .is_ok()
     }
 }
 
