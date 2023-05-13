@@ -1,6 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
-#include <{0}>
+{0}
 
 int main() {{
 	fprintf(stdout, "%lld", (long long)(int64_t)({1}));

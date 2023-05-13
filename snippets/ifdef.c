@@ -1,4 +1,5 @@
-#include <{0}>
+#include <stdio.h>
+{}
 
 int main() {{
 #if defined({1})

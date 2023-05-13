@@ -3,6 +3,7 @@ mod tempdir;
 mod tests;
 
 use cc::Build;
+pub use sealed::{Header, OptionalHeader};
 use std::borrow::Cow;
 use std::ffi::{OsStr, OsString};
 use std::io::prelude::*;
@@ -15,11 +16,11 @@ static FILE_COUNTER: AtomicI32 = AtomicI32::new(0);
 type BoxedError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 pub struct Detector {
-    compiler: Build,
-    temp: TempDir,
-    verbose: bool,
-    /// Whether or not we are compiling with cl.exe (and not clang.exe) under xxx-pc-windows-msvc.
+    /// Whether or not we are compiling with `cl.exe` (and not `clang.exe`) under `xxx-pc-windows-msvc`.
     is_cl: bool,
+    temp: TempDir,
+    toolchain: Build,
+    verbose: bool,
 }
 
 macro_rules! snippet {
@@ -59,22 +60,26 @@ enum BuildMode {
 }
 
 impl Detector {
-    pub fn new(mut compiler: cc::Build) -> std::io::Result<Detector> {
+    /// Create a new rsconf instance from the configured [`cc::Build`] instance `toolchain`.
+    ///
+    /// All tests inherit their base configuration from `toolchain`, so make sure it is configured
+    /// with the appropriate header and library search paths as needed.
+    pub fn new(mut toolchain: cc::Build) -> std::io::Result<Detector> {
         let temp = if let Some(out_dir) = std::env::var_os("OUT_DIR") {
             TempDir::new_in(out_dir)?
         } else {
             // Configure Build's OUT_DIR if not set (e.g. for testing)
             let temp = TempDir::new()?;
-            compiler.out_dir(&temp);
+            toolchain.out_dir(&temp);
             temp
         };
 
-        let is_cl = cfg!(windows) && compiler.get_compiler().is_like_msvc();
+        let is_cl = cfg!(windows) && toolchain.get_compiler().is_like_msvc();
 
         Ok(Self {
-            compiler,
-            temp,
             is_cl,
+            temp,
+            toolchain,
             verbose: false,
         })
     }
@@ -139,7 +144,7 @@ impl Detector {
             BuildMode::Executable => self.new_temp(&stub, exe_ext),
             BuildMode::ObjectFile => self.new_temp(&stub, obj_ext),
         };
-        let mut cmd = self.compiler.try_get_compiler()?.to_command();
+        let mut cmd = self.toolchain.try_get_compiler()?.to_command();
 
         let exe = mode == BuildMode::Executable;
         let link = exe || library.is_some();
@@ -205,8 +210,8 @@ impl Detector {
     ///
     /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
     /// require being able to run a binary compiled for the target platform.
-    pub fn get_i32_value(&self, header: &str, ident: &str) -> Result<i32, BoxedError> {
-        let snippet = format!(snippet!("get_i32_value.c"), header, ident);
+    pub fn get_i32_value<H: Header>(&self, header: H, ident: &str) -> Result<i32, BoxedError> {
+        let snippet = format!(snippet!("get_i32_value.c"), header.to_header_lines(), ident);
         let exe = self.build(ident, BuildMode::Executable, &snippet, None)?;
 
         let output = Command::new(exe).output().map_err(|err| {
@@ -226,8 +231,8 @@ impl Detector {
     ///
     /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
     /// require being able to run a binary compiled for the target platform.
-    pub fn get_u32_value(&self, header: &str, ident: &str) -> Result<u32, BoxedError> {
-        let snippet = format!(snippet!("get_u32_value.c"), header, ident);
+    pub fn get_u32_value<H: Header>(&self, header: H, ident: &str) -> Result<u32, BoxedError> {
+        let snippet = format!(snippet!("get_u32_value.c"), header.to_header_lines(), ident);
         let exe = self.build(ident, BuildMode::Executable, &snippet, None)?;
 
         let output = Command::new(exe).output().map_err(|err| {
@@ -247,8 +252,8 @@ impl Detector {
     ///
     /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
     /// require being able to run a binary compiled for the target platform.
-    pub fn get_i64_value(&self, header: &str, ident: &str) -> Result<i64, BoxedError> {
-        let snippet = format!(snippet!("get_i64_value.c"), header, ident);
+    pub fn get_i64_value<H: Header>(&self, header: H, ident: &str) -> Result<i64, BoxedError> {
+        let snippet = format!(snippet!("get_i64_value.c"), header.to_header_lines(), ident);
         let exe = self.build(ident, BuildMode::Executable, &snippet, None)?;
 
         let output = Command::new(exe).output().map_err(|err| {
@@ -268,8 +273,8 @@ impl Detector {
     ///
     /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
     /// require being able to run a binary compiled for the target platform.
-    pub fn get_u64_value(&self, header: &str, ident: &str) -> Result<u64, BoxedError> {
-        let snippet = format!(snippet!("get_u64_value.c"), header, ident);
+    pub fn get_u64_value<H: Header>(&self, header: H, ident: &str) -> Result<u64, BoxedError> {
+        let snippet = format!(snippet!("get_u64_value.c"), header.to_header_lines(), ident);
         let exe = self.build(ident, BuildMode::Executable, &snippet, None)?;
 
         let output = Command::new(exe).output().map_err(|err| {
@@ -283,9 +288,9 @@ impl Detector {
 
     /// Checks whether the [`cc::Build`] passed to [`Detector::new()`] as configured can pull in the
     /// named `header` file.
-    pub fn has_header(&self, header: &str) -> bool {
-        let snippet = format!(snippet!("has_header.c"), header);
-        self.build(header, BuildMode::ObjectFile, &snippet, None)
+    pub fn has_header<H: Header>(&self, header: H) -> bool {
+        let snippet = format!(snippet!("has_header.c"), header.to_header_lines());
+        self.build(header.preview(), BuildMode::ObjectFile, &snippet, None)
             .is_ok()
     }
 
@@ -294,9 +299,8 @@ impl Detector {
     /// This is the C equivalent of `#ifdef xxxx` and does not check if there is a value associated
     /// with the definition. (You can use [`if()`](Self::if()) to test if a define has a particular
     /// value.)
-    pub fn ifdef(&self, header: Option<&str>, define: &str) -> bool {
-        let header = header.unwrap_or("stdio.h");
-        let snippet = format!(snippet!("ifdef.c"), header, define);
+    pub fn ifdef<H: OptionalHeader>(&self, header: H, define: &str) -> bool {
+        let snippet = format!(snippet!("ifdef.c"), header.to_header_lines(), define);
         self.build(define, BuildMode::ObjectFile, &snippet, None)
             .is_ok()
     }
@@ -306,9 +310,8 @@ impl Detector {
     /// This can be used with `condition` set to `defined(XXX)` to perform the equivalent of
     /// [`ifdef()`](Self::ifdef) or it can be used to check for specific values e.g. with
     /// `condition` set to something like `XXX != 0`.
-    pub fn r#if(&self, header: Option<&str>, condition: &str) -> bool {
-        let header = header.unwrap_or("stdio.h");
-        let snippet = format!(snippet!("if.c"), header, condition);
+    pub fn r#if<H: OptionalHeader>(&self, header: H, condition: &str) -> bool {
+        let snippet = format!(snippet!("if.c"), header.to_header_lines(), condition);
         self.build(condition, BuildMode::ObjectFile, &snippet, None)
             .is_ok()
     }
@@ -330,4 +333,61 @@ impl Detector {
         self.build(library, BuildMode::Executable, snippet, Some(library))
             .is_ok()
     }
+}
+
+mod sealed {
+    /// An abstraction to make it possible to check for or include one header or multiple headers.
+    ///
+    /// Defined for `AsRef<str>` and `&[AsRef<str>]`.
+    pub trait OptionalHeader {
+        fn to_header_lines(&self) -> String;
+        fn preview(&self) -> &str;
+    }
+
+    impl OptionalHeader for &str {
+        fn to_header_lines(&self) -> String {
+            format!("#include <{}>\n\n", *self)
+        }
+
+        fn preview(&self) -> &str {
+            *self
+        }
+    }
+
+    impl OptionalHeader for &[&str] {
+        fn to_header_lines(&self) -> String {
+            let mut result = Vec::with_capacity(self.len());
+            for line in self.iter().map(|s| format!("#include <{}>", s)) {
+                result.push(line);
+            }
+            let mut result = result.join("\n");
+            result.push('\n');
+            result
+        }
+
+        fn preview(&self) -> &str {
+            self.first().map(|s| *s).unwrap_or("none")
+        }
+    }
+
+    impl OptionalHeader for Option<&str> {
+        fn to_header_lines(&self) -> String {
+            match self {
+                Some(h) => h.to_header_lines(),
+                None => String::new(),
+            }
+        }
+
+        fn preview(&self) -> &str {
+            match self {
+                Some(h) => h.preview(),
+                None => "",
+            }
+        }
+    }
+
+    pub trait Header: OptionalHeader {}
+
+    impl Header for &[&str] {}
+    impl Header for &str {}
 }
