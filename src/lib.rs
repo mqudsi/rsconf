@@ -182,9 +182,11 @@ impl Detector {
         Ok(out_path)
     }
 
-    pub fn symbol_is_defined(&self, header: &str, symbol: &str) -> bool {
-        let snippet = format!(snippet!("symbol_is_defined.c"), header, symbol);
-        self.build(symbol, BuildMode::ObjectFile, &snippet, None).is_ok()
+    /// Checks whether a definition for `ident` exists in the supplied `header`.
+    /// This operation does not link the output; only the header file is inspected.
+    pub fn is_defined(&self, header: &str, ident: &str) -> bool {
+        let snippet = format!(snippet!("symbol_is_defined.c"), header, ident);
+        self.build(ident, BuildMode::ObjectFile, &snippet, None).is_ok()
     }
 
     pub fn symbol_i32_value(&self, header: &str, symbol: &str) -> Result<i32, BoxedError> {
@@ -239,20 +241,29 @@ impl Detector {
         Ok(std::str::from_utf8(&output.stdout)?.parse()?)
     }
 
+    /// Checks whether the [`cc::Build`] passed to [`Detector::new()`] as configured can pull in the
+    /// named `header` file.
     pub fn has_header(&self, header: &str) -> bool {
         let snippet = format!(snippet!("has_header.c"), header);
         self.build(header, BuildMode::ObjectFile, &snippet, None).is_ok()
     }
 
-    /// Evaluates whether or not `define` is defined; does not check if it has a value.
+    /// Evaluates whether or not `define` is an extant preprocessor definition.
     ///
-    /// This is the C equivalent of `#ifdef xxxx`.
+    /// This is the C equivalent of `#ifdef xxxx` and does not check if there is a value associated
+    /// with the definition. (You can use [`if()`](Self::if()) to test if a define has a particular
+    /// value.)
     pub fn ifdef(&self, header: Option<&str>, define: &str) -> bool {
         let header = header.unwrap_or("stdio.h");
         let snippet = format!(snippet!("ifdef.c"), header, define);
         self.build(define, BuildMode::ObjectFile, &snippet, None).is_ok()
     }
 
+    /// Evaluates whether or not `condition` evaluates to true at preprocessor time.
+    ///
+    /// This can be used with `condition` set to `defined(XXX)` to perform the equivalent of
+    /// [`ifdef()`](Self::ifdef) or it can be used to check for specific values e.g. with
+    /// `condition` set to something like `XXX != 0`.
     pub fn r#if(&self, header: Option<&str>, condition: &str) -> bool {
         let header = header.unwrap_or("stdio.h");
         let snippet = format!(snippet!("if.c"), header, condition);
