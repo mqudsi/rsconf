@@ -2,8 +2,8 @@
 mod tests;
 
 use cc::Build;
+use std::borrow::Cow;
 use std::ffi::{OsStr, OsString};
-use std::fs::File;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -50,6 +50,12 @@ fn output_or_err(output: Output) -> Result<String, BoxedError> {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum BuildMode {
+    Executable,
+    ObjectFile,
+}
+
 impl Detector {
     pub fn new(mut compiler: cc::Build) -> std::io::Result<Detector> {
         let temp = if let Some(out_dir) = std::env::var_os("OUT_DIR") {
@@ -86,17 +92,50 @@ impl Detector {
         path
     }
 
-    fn build(&self, code: &str) -> Result<PathBuf, BoxedError> {
+    fn build(
+        &self,
+        mode: BuildMode,
+        code: &str,
+        library: Option<&str>,
+    ) -> Result<PathBuf, BoxedError> {
+        let mut library = library.map(|lib| Cow::from(lib));
+        // #[cfg(windows)]
+        if library.as_ref().map(|lib| !lib.contains('.')).unwrap_or(false) {
+            let owned = library.unwrap().into_owned() + ".lib";
+            library = Some(Cow::from(owned));
+        }
+
         let in_path = self.new_temp(".c");
         std::fs::File::create(&in_path)?.write_all(code.as_bytes())?;
-        let out_path = self.new_temp(".o");
+        let exe_ext = if cfg!(unix) { ".out" } else { ".exe" };
+        let obj_ext = if cfg!(unix) { ".o" } else { ".obj" };
+        let out_path = match mode {
+            BuildMode::Executable => self.new_temp(exe_ext),
+            BuildMode::ObjectFile => self.new_temp(obj_ext),
+        };
         let mut cmd = self.compiler.try_get_compiler()?.to_command();
+
+        let exe = mode == BuildMode::Executable;
+        let link = exe || library.is_some();
         let output = if cfg!(unix) || !self.is_cl {
-            cmd.args([in_path.as_os_str(), OsStr::new("-o"), out_path.as_os_str()])
+            cmd.args([in_path.as_os_str(), OsStr::new("-o"), out_path.as_os_str()]);
+            if !link {
+                cmd.arg("-c");
+            } else if let Some(library) = library {
+                cmd.arg(format!("-l{library}"));
+            }
+            cmd
         } else {
-            let mut output = OsString::from("/out:");
+            cmd.arg(in_path);
+            let mut output = OsString::from(if exe { "/Fe:" } else { "/Fo:" });
             output.push(&out_path);
-            cmd.args([in_path.as_os_str(), OsStr::new("/link"), &output])
+            cmd.arg(output);
+            if !link {
+                cmd.arg("/c");
+            } else if let Some(library) = library {
+                cmd.arg(&*library);
+            }
+            cmd
         }
         .output()?;
         if self.verbose {
@@ -104,32 +143,7 @@ impl Detector {
             std::io::stderr().lock().write_all(&output.stderr).ok();
         }
         // Handle custom `CompilationError` output if we failed to compile.
-        let _ = output_or_err(output)?;
-
-        // Return the path to the resulting exe
-        assert!(out_path.exists());
-        Ok(out_path)
-    }
-
-    fn build_exe(&self, code: &str) -> Result<PathBuf, BoxedError> {
-        let in_path = self.new_temp(".c");
-        File::create(&in_path)?.write_all(code.as_bytes())?;
-        let out_path = self.new_temp(".o");
-        let mut cmd = self.compiler.try_get_compiler()?.to_command();
-        let output = if cfg!(unix) || !self.is_cl {
-            cmd.args([in_path.as_os_str(), OsStr::new("-o"), out_path.as_os_str()])
-        } else {
-            let mut output = OsString::from("/out:");
-            output.push(&out_path);
-            cmd.args([in_path.as_os_str(), OsStr::new("/link"), &output])
-        }
-        .output()?;
-        if self.verbose {
-            std::io::stdout().lock().write_all(&output.stdout).ok();
-            std::io::stderr().lock().write_all(&output.stderr).ok();
-        }
-        // Handle custom `CompilationError` output if we failed to compile.
-        let _ = output_or_err(output)?;
+        output_or_err(output)?;
 
         // Return the path to the resulting exe
         assert!(out_path.exists());
@@ -138,12 +152,12 @@ impl Detector {
 
     pub fn symbol_is_defined(&self, header: &str, symbol: &str) -> bool {
         let snippet = format!(snippet!("symbol_is_defined.c"), header, symbol);
-        self.build(&snippet).is_ok()
+        self.build(BuildMode::ObjectFile, &snippet, None).is_ok()
     }
 
     pub fn symbol_i32_value(&self, header: &str, symbol: &str) -> Result<i32, BoxedError> {
         let snippet = format!(snippet!("symbol_i32_value.c"), header, symbol);
-        let exe = self.build_exe(&snippet)?;
+        let exe = self.build(BuildMode::Executable, &snippet, None)?;
 
         let output = Command::new(exe).output().map_err(|err| {
             format!(
@@ -156,7 +170,7 @@ impl Detector {
 
     pub fn symbol_u32_value(&self, header: &str, symbol: &str) -> Result<u32, BoxedError> {
         let snippet = format!(snippet!("symbol_u32_value.c"), header, symbol);
-        let exe = self.build_exe(&snippet)?;
+        let exe = self.build(BuildMode::Executable, &snippet, None)?;
 
         let output = Command::new(exe).output().map_err(|err| {
             format!(
@@ -169,7 +183,7 @@ impl Detector {
 
     pub fn symbol_i64_value(&self, header: &str, symbol: &str) -> Result<i64, BoxedError> {
         let snippet = format!(snippet!("symbol_i64_value.c"), header, symbol);
-        let exe = self.build_exe(&snippet)?;
+        let exe = self.build(BuildMode::Executable, &snippet, None)?;
 
         let output = Command::new(exe).output().map_err(|err| {
             format!(
@@ -182,7 +196,7 @@ impl Detector {
 
     pub fn symbol_u64_value(&self, header: &str, symbol: &str) -> Result<u64, BoxedError> {
         let snippet = format!(snippet!("symbol_u64_value.c"), header, symbol);
-        let exe = self.build_exe(&snippet)?;
+        let exe = self.build(BuildMode::Executable, &snippet, None)?;
 
         let output = Command::new(exe).output().map_err(|err| {
             format!(
@@ -193,21 +207,38 @@ impl Detector {
         Ok(std::str::from_utf8(&output.stdout)?.parse()?)
     }
 
+    pub fn has_header(&self, header: &str) -> bool {
+        let snippet = format!(snippet!("has_header.c"), header);
+        self.build(BuildMode::ObjectFile, &snippet, None).is_ok()
+    }
+
     pub fn is_defined(&self, header: Option<&str>, define: &str) -> bool {
         let header = header.unwrap_or("stdio.h");
         let snippet = format!(snippet!("is_defined.c"), header, define);
-        self.build(&snippet).is_ok()
-    }
-
-    pub fn has_header(&self, header: &str) -> bool {
-        let snippet = format!(snippet!("has_header.c"), header);
-        self.build(&snippet).is_ok()
+        self.build(BuildMode::ObjectFile, &snippet, None).is_ok()
     }
 
     pub fn r#if(&self, header: Option<&str>, condition: &str) -> bool {
         let header = header.unwrap_or("stdio.h");
         let snippet = format!(snippet!("if.c"), header, condition);
-        self.build(&snippet).is_ok()
+        self.build(BuildMode::ObjectFile, &snippet, None).is_ok()
+    }
+
+    /// Returns whether or not it was possible to link against `library`.
+    ///
+    /// You should normally pass the name of the library without any prefixes or suffixes. If a
+    /// suffix is provided, it will not be removed.
+    ///
+    /// You may pass a full path to the library (again minus the extension) instead of just the
+    /// library name in order to try linking against a library not in the library search path.
+    /// Alternatively, configure the [`cc::Build`] instance with the search paths as needed before
+    /// passing it to [`Detector::new()`].
+    ///
+    /// Under Windows, if `library` does not have an extension it will be suffixed with `.lib` prior
+    /// to testing linking. (This way it works under under both `cl.exe` and `clang.exe`.)
+    pub fn has_library(&self, library: &str) -> bool {
+        let snippet = snippet!("empty.c");
+        self.build(BuildMode::Executable, &snippet, Some(library)).is_ok()
     }
 }
 
