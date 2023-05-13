@@ -244,9 +244,12 @@ impl Detector {
         self.build(header, BuildMode::ObjectFile, &snippet, None).is_ok()
     }
 
-    pub fn is_defined(&self, header: Option<&str>, define: &str) -> bool {
+    /// Evaluates whether or not `define` is defined; does not check if it has a value.
+    ///
+    /// This is the C equivalent of `#ifdef xxxx`.
+    pub fn ifdef(&self, header: Option<&str>, define: &str) -> bool {
         let header = header.unwrap_or("stdio.h");
-        let snippet = format!(snippet!("is_defined.c"), header, define);
+        let snippet = format!(snippet!("ifdef.c"), header, define);
         self.build(define, BuildMode::ObjectFile, &snippet, None).is_ok()
     }
 
