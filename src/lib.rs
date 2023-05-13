@@ -85,33 +85,53 @@ impl Detector {
         self.verbose = verbose;
     }
 
-    fn new_temp(&self, ext: &str) -> PathBuf {
+    fn new_temp<S: AsRef<str>>(&self, stub: S, ext: &str) -> PathBuf {
         let file_num = FILE_COUNTER.fetch_add(1, Ordering::Release);
+        let stub = stub.as_ref();
         let mut path = self.temp.to_owned();
-        path.push(format!("test-{file_num}{ext}"));
+        path.push(format!("{stub}-test-{file_num}{ext}"));
         path
+    }
+
+    /// Sanitizes a string for use in a file name
+    fn fs_sanitize(s: &str) -> Cow<'_, str> {
+        if s.chars().all(|c| c.is_ascii_alphanumeric()) {
+            return Cow::Borrowed(s);
+        }
+
+        let mut out = String::with_capacity(s.len());
+        for c in s.chars() {
+            if !c.is_ascii_alphanumeric() {
+                out.push('_');
+            } else {
+                out.push(c);
+            }
+        }
+        Cow::Owned(out)
     }
 
     fn build(
         &self,
+        stub: &str,
         mode: BuildMode,
         code: &str,
         library: Option<&str>,
     ) -> Result<PathBuf, BoxedError> {
-        let mut library = library.map(|lib| Cow::from(lib));
+        let stub = Self::fs_sanitize(stub);
+        let mut library = library.map(Cow::from);
         // #[cfg(windows)]
         if library.as_ref().map(|lib| !lib.contains('.')).unwrap_or(false) {
             let owned = library.unwrap().into_owned() + ".lib";
             library = Some(Cow::from(owned));
         }
 
-        let in_path = self.new_temp(".c");
+        let in_path = self.new_temp(&stub, ".c");
         std::fs::File::create(&in_path)?.write_all(code.as_bytes())?;
         let exe_ext = if cfg!(unix) { ".out" } else { ".exe" };
         let obj_ext = if cfg!(unix) { ".o" } else { ".obj" };
         let out_path = match mode {
-            BuildMode::Executable => self.new_temp(exe_ext),
-            BuildMode::ObjectFile => self.new_temp(obj_ext),
+            BuildMode::Executable => self.new_temp(&stub, exe_ext),
+            BuildMode::ObjectFile => self.new_temp(&stub, obj_ext),
         };
         let mut cmd = self.compiler.try_get_compiler()?.to_command();
 
@@ -152,12 +172,12 @@ impl Detector {
 
     pub fn symbol_is_defined(&self, header: &str, symbol: &str) -> bool {
         let snippet = format!(snippet!("symbol_is_defined.c"), header, symbol);
-        self.build(BuildMode::ObjectFile, &snippet, None).is_ok()
+        self.build(symbol, BuildMode::ObjectFile, &snippet, None).is_ok()
     }
 
     pub fn symbol_i32_value(&self, header: &str, symbol: &str) -> Result<i32, BoxedError> {
         let snippet = format!(snippet!("symbol_i32_value.c"), header, symbol);
-        let exe = self.build(BuildMode::Executable, &snippet, None)?;
+        let exe = self.build(symbol, BuildMode::Executable, &snippet, None)?;
 
         let output = Command::new(exe).output().map_err(|err| {
             format!(
@@ -170,7 +190,7 @@ impl Detector {
 
     pub fn symbol_u32_value(&self, header: &str, symbol: &str) -> Result<u32, BoxedError> {
         let snippet = format!(snippet!("symbol_u32_value.c"), header, symbol);
-        let exe = self.build(BuildMode::Executable, &snippet, None)?;
+        let exe = self.build(symbol, BuildMode::Executable, &snippet, None)?;
 
         let output = Command::new(exe).output().map_err(|err| {
             format!(
@@ -183,7 +203,7 @@ impl Detector {
 
     pub fn symbol_i64_value(&self, header: &str, symbol: &str) -> Result<i64, BoxedError> {
         let snippet = format!(snippet!("symbol_i64_value.c"), header, symbol);
-        let exe = self.build(BuildMode::Executable, &snippet, None)?;
+        let exe = self.build(symbol, BuildMode::Executable, &snippet, None)?;
 
         let output = Command::new(exe).output().map_err(|err| {
             format!(
@@ -196,7 +216,7 @@ impl Detector {
 
     pub fn symbol_u64_value(&self, header: &str, symbol: &str) -> Result<u64, BoxedError> {
         let snippet = format!(snippet!("symbol_u64_value.c"), header, symbol);
-        let exe = self.build(BuildMode::Executable, &snippet, None)?;
+        let exe = self.build(symbol, BuildMode::Executable, &snippet, None)?;
 
         let output = Command::new(exe).output().map_err(|err| {
             format!(
@@ -209,19 +229,19 @@ impl Detector {
 
     pub fn has_header(&self, header: &str) -> bool {
         let snippet = format!(snippet!("has_header.c"), header);
-        self.build(BuildMode::ObjectFile, &snippet, None).is_ok()
+        self.build(header, BuildMode::ObjectFile, &snippet, None).is_ok()
     }
 
     pub fn is_defined(&self, header: Option<&str>, define: &str) -> bool {
         let header = header.unwrap_or("stdio.h");
         let snippet = format!(snippet!("is_defined.c"), header, define);
-        self.build(BuildMode::ObjectFile, &snippet, None).is_ok()
+        self.build(define, BuildMode::ObjectFile, &snippet, None).is_ok()
     }
 
     pub fn r#if(&self, header: Option<&str>, condition: &str) -> bool {
         let header = header.unwrap_or("stdio.h");
         let snippet = format!(snippet!("if.c"), header, condition);
-        self.build(BuildMode::ObjectFile, &snippet, None).is_ok()
+        self.build(condition, BuildMode::ObjectFile, &snippet, None).is_ok()
     }
 
     /// Returns whether or not it was possible to link against `library`.
@@ -238,7 +258,7 @@ impl Detector {
     /// to testing linking. (This way it works under under both `cl.exe` and `clang.exe`.)
     pub fn has_library(&self, library: &str) -> bool {
         let snippet = snippet!("empty.c");
-        self.build(BuildMode::Executable, &snippet, Some(library)).is_ok()
+        self.build(library, BuildMode::Executable, snippet, Some(library)).is_ok()
     }
 }
 

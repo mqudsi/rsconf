@@ -32,7 +32,7 @@ static DETECTOR: Lazy<Detector> = Lazy::new(|| {
 });
 
 pub fn detector() -> &'static Detector {
-    &*DETECTOR
+    &DETECTOR
 }
 
 #[test]
