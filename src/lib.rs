@@ -158,6 +158,18 @@ impl Detector {
             cmd
         }
         .output()?;
+
+        // We want to output text in verbose mode but writing directly to stdout doesn't get
+        // intercepted by the cargo test harness. In test mode, we use the slower `println!()`/
+        // `eprintln!()` macros together w/ from_utf8_lossy() to suppress unnecessary output when
+        // we're not investigating the details with `cargo test -- --nocapture`, but we use the
+        // faster approach when we're being used in an actual build script.
+        #[cfg(test)]
+        if self.verbose {
+            println!("{}", String::from_utf8_lossy(&output.stdout));
+            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+        }
+        #[cfg(not(test))]
         if self.verbose {
             std::io::stdout().lock().write_all(&output.stdout).ok();
             std::io::stderr().lock().write_all(&output.stderr).ok();
