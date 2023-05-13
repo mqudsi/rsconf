@@ -185,57 +185,57 @@ impl Detector {
     /// Checks whether a definition for `ident` exists in the supplied `header`.
     /// This operation does not link the output; only the header file is inspected.
     pub fn is_defined(&self, header: &str, ident: &str) -> bool {
-        let snippet = format!(snippet!("symbol_is_defined.c"), header, ident);
+        let snippet = format!(snippet!("is_defined.c"), header, ident);
         self.build(ident, BuildMode::ObjectFile, &snippet, None).is_ok()
     }
 
-    pub fn symbol_i32_value(&self, header: &str, symbol: &str) -> Result<i32, BoxedError> {
-        let snippet = format!(snippet!("symbol_i32_value.c"), header, symbol);
-        let exe = self.build(symbol, BuildMode::Executable, &snippet, None)?;
+    pub fn get_i32_value(&self, header: &str, ident: &str) -> Result<i32, BoxedError> {
+        let snippet = format!(snippet!("get_i32_value.c"), header, ident);
+        let exe = self.build(ident, BuildMode::Executable, &snippet, None)?;
 
         let output = Command::new(exe).output().map_err(|err| {
             format!(
                 "Failed to run the test executable: {err}!\n{}",
-                "Note that symbol_i32_value() does not support cross-compilation!"
+                "Note that get_i32_value() does not support cross-compilation!"
             )
         })?;
         Ok(std::str::from_utf8(&output.stdout)?.parse()?)
     }
 
-    pub fn symbol_u32_value(&self, header: &str, symbol: &str) -> Result<u32, BoxedError> {
-        let snippet = format!(snippet!("symbol_u32_value.c"), header, symbol);
-        let exe = self.build(symbol, BuildMode::Executable, &snippet, None)?;
+    pub fn get_u32_value(&self, header: &str, ident: &str) -> Result<u32, BoxedError> {
+        let snippet = format!(snippet!("get_u32_value.c"), header, ident);
+        let exe = self.build(ident, BuildMode::Executable, &snippet, None)?;
 
         let output = Command::new(exe).output().map_err(|err| {
             format!(
                 "Failed to run the test executable: {err}!\n{}",
-                "Note that symbol_u32_value() does not support cross-compilation!"
+                "Note that get_u32_value() does not support cross-compilation!"
             )
         })?;
         Ok(std::str::from_utf8(&output.stdout)?.parse()?)
     }
 
-    pub fn symbol_i64_value(&self, header: &str, symbol: &str) -> Result<i64, BoxedError> {
-        let snippet = format!(snippet!("symbol_i64_value.c"), header, symbol);
-        let exe = self.build(symbol, BuildMode::Executable, &snippet, None)?;
+    pub fn get_i64_value(&self, header: &str, ident: &str) -> Result<i64, BoxedError> {
+        let snippet = format!(snippet!("get_i64_value.c"), header, ident);
+        let exe = self.build(ident, BuildMode::Executable, &snippet, None)?;
 
         let output = Command::new(exe).output().map_err(|err| {
             format!(
                 "Failed to run the test executable: {err}!\n{}",
-                "Note that symbol_i64_value() does not support cross-compilation!"
+                "Note that get_i64_value() does not support cross-compilation!"
             )
         })?;
         Ok(std::str::from_utf8(&output.stdout)?.parse()?)
     }
 
-    pub fn symbol_u64_value(&self, header: &str, symbol: &str) -> Result<u64, BoxedError> {
-        let snippet = format!(snippet!("symbol_u64_value.c"), header, symbol);
-        let exe = self.build(symbol, BuildMode::Executable, &snippet, None)?;
+    pub fn get_u64_value(&self, header: &str, ident: &str) -> Result<u64, BoxedError> {
+        let snippet = format!(snippet!("get_u64_value.c"), header, ident);
+        let exe = self.build(ident, BuildMode::Executable, &snippet, None)?;
 
         let output = Command::new(exe).output().map_err(|err| {
             format!(
                 "Failed to run the test executable: {err}!\n{}",
-                "Note that symbol_u64_value() does not support cross-compilation!"
+                "Note that get_u64_value() does not support cross-compilation!"
             )
         })?;
         Ok(std::str::from_utf8(&output.stdout)?.parse()?)

@@ -38,26 +38,26 @@ pub fn detector() -> &'static Detector {
 #[test]
 fn symbol_defined() {
     let detector = detector();
-    assert_eq!(detector.symbol_is_defined("stdio.h", "struct FILE"), true);
+    assert_eq!(detector.is_defined("stdio.h", "struct FILE"), true);
 }
 
 #[test]
 #[cfg(target_os = "linux")]
 fn dir_defined() {
     let detector = detector();
-    assert_eq!(detector.symbol_is_defined("dirent.h", "struct DIR"), true);
+    assert_eq!(detector.is_defined("dirent.h", "struct DIR"), true);
 }
 
 #[test]
 fn symbol_not_defined() {
     let detector = detector();
-    assert_eq!(detector.symbol_is_defined("stdio.h", "DIR"), false);
+    assert_eq!(detector.is_defined("stdio.h", "DIR"), false);
 }
 
 #[test]
 fn valid_u32_value() {
     let detector = detector();
-    let result = detector.symbol_u32_value("limits.h", "INT_MAX");
+    let result = detector.get_u32_value("limits.h", "INT_MAX");
     assert_eq!(result.unwrap(), 2147483647);
 }
 
@@ -65,28 +65,28 @@ fn valid_u32_value() {
 #[cfg(target_os = "linux")]
 fn dirent_value() {
     let detector = detector();
-    let result = detector.symbol_u32_value("dirent.h", "DT_FIFO");
+    let result = detector.get_u32_value("dirent.h", "DT_FIFO");
     assert_eq!(result.unwrap(), 1);
 }
 
 #[test]
 fn valid_u64_value() {
     let detector = detector();
-    let result = detector.symbol_u64_value("limits.h", "LLONG_MAX");
+    let result = detector.get_u64_value("limits.h", "LLONG_MAX");
     assert_eq!(result.unwrap(), 9223372036854775807);
 }
 
 #[test]
 fn valid_i32_value() {
     let detector = detector();
-    let result = detector.symbol_i32_value("limits.h", "INT_MIN");
+    let result = detector.get_i32_value("limits.h", "INT_MIN");
     assert_eq!(result.unwrap(), i32::MIN);
 }
 
 #[test]
 fn invalid_i32_value() {
     let detector = detector();
-    let result = detector.symbol_i32_value("limits.h", "LLONG_MAX");
+    let result = detector.get_i32_value("limits.h", "LLONG_MAX");
     assert!(matches!(result, Err(_)));
 }
 
