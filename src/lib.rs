@@ -206,7 +206,7 @@ impl Detector {
     /// `ident` was defined, has a concrete value, is a compile-time constant (i.e. does not need to
     /// be linked to retrieve the value), and is a valid `i32` value.
     ///
-    /// # Note on cross-compilation:
+    /// # Cross-compliation note:
     ///
     /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
     /// require being able to run a binary compiled for the target platform.
@@ -227,7 +227,7 @@ impl Detector {
     /// `ident` was defined, has a concrete value, is a compile-time constant (i.e. does not need to
     /// be linked to retrieve the value), and is a valid `u32` value.
     ///
-    /// # Note on cross-compilation:
+    /// # Cross-compliation note:
     ///
     /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
     /// require being able to run a binary compiled for the target platform.
@@ -248,7 +248,7 @@ impl Detector {
     /// `ident` was defined, has a concrete value, is a compile-time constant (i.e. does not need to
     /// be linked to retrieve the value), and is a valid `i64` value.
     ///
-    /// # Note on cross-compilation:
+    /// # Cross-compliation note:
     ///
     /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
     /// require being able to run a binary compiled for the target platform.
@@ -269,7 +269,7 @@ impl Detector {
     /// `ident` was defined, has a concrete value, is a compile-time constant (i.e. does not need to
     /// be linked to retrieve the value), and is a valid `u64` value.
     ///
-    /// # Note on cross-compilation:
+    /// # Cross-compliation note:
     ///
     /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
     /// require being able to run a binary compiled for the target platform.
@@ -336,9 +336,10 @@ impl Detector {
 }
 
 mod sealed {
-    /// An abstraction to make it possible to check for or include one header or multiple headers.
+    /// An abstraction to make it possible to check for or include zero or more headers. Headers are
+    /// included in the same order they are provided in.
     ///
-    /// Defined for `AsRef<str>` and `&[AsRef<str>]`.
+    /// Defined for `&str` and `&[&str]` as well as `None`.
     pub trait OptionalHeader {
         fn to_header_lines(&self) -> String;
         fn preview(&self) -> &str;
@@ -386,6 +387,10 @@ mod sealed {
         }
     }
 
+    /// An abstraction to make it possible to check for or include one or more headers. Headers are
+    /// included in the same order they are provided in.
+    ///
+    /// Defined for `&str` and `&[&str]`.
     pub trait Header: OptionalHeader {}
 
     impl Header for &[&str] {}
