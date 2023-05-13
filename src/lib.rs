@@ -202,13 +202,35 @@ impl Detector {
             .is_ok()
     }
 
-    /// Checks whether or not the the requested `symbol` is exported by `library`. This only checks
-    /// for symbols exported by the C abi (so mangled names are required) and does not check for
-    /// compile-time definitions provided by header files. See [`is_defined()`](Self::is_defined)
-    /// to check for compile-time definitions.
+    /// Checks whether or not the the requested `symbol` is exported by `library`.
+    ///
+    /// This only checks for symbols exported by the C abi (so mangled names are required) and does
+    /// not check for compile-time definitions provided by header files.
+    ///
+    /// See [`has_definition()`](Self::has_definition) to check for compile-time definitions. This
+    /// function will return false if `library` could not be found or could not be linked; see
+    /// [`has_library()`](Self::has_library) to test if `library` can be linked separately.
     pub fn has_symbol(&self, library: &str, symbol: &str) -> bool {
         let snippet = format!(snippet!("has_symbol.c"), symbol);
         self.build(symbol, BuildMode::Executable, &snippet, Some(library))
+            .is_ok()
+    }
+
+    /// Returns whether or not it was possible to link against `library`.
+    ///
+    /// You should normally pass the name of the library without any prefixes or suffixes. If a
+    /// suffix is provided, it will not be removed.
+    ///
+    /// You may pass a full path to the library (again minus the extension) instead of just the
+    /// library name in order to try linking against a library not in the library search path.
+    /// Alternatively, configure the [`cc::Build`] instance with the search paths as needed before
+    /// passing it to [`Detector::new()`].
+    ///
+    /// Under Windows, if `library` does not have an extension it will be suffixed with `.lib` prior
+    /// to testing linking. (This way it works under under both `cl.exe` and `clang.exe`.)
+    pub fn has_library(&self, library: &str) -> bool {
+        let snippet = snippet!("empty.c");
+        self.build(library, BuildMode::Executable, snippet, Some(library))
             .is_ok()
     }
 
@@ -323,24 +345,6 @@ impl Detector {
     pub fn r#if<H: OptionalHeader>(&self, header: H, condition: &str) -> bool {
         let snippet = format!(snippet!("if.c"), header.to_header_lines(), condition);
         self.build(condition, BuildMode::ObjectFile, &snippet, None)
-            .is_ok()
-    }
-
-    /// Returns whether or not it was possible to link against `library`.
-    ///
-    /// You should normally pass the name of the library without any prefixes or suffixes. If a
-    /// suffix is provided, it will not be removed.
-    ///
-    /// You may pass a full path to the library (again minus the extension) instead of just the
-    /// library name in order to try linking against a library not in the library search path.
-    /// Alternatively, configure the [`cc::Build`] instance with the search paths as needed before
-    /// passing it to [`Detector::new()`].
-    ///
-    /// Under Windows, if `library` does not have an extension it will be suffixed with `.lib` prior
-    /// to testing linking. (This way it works under under both `cl.exe` and `clang.exe`.)
-    pub fn has_library(&self, library: &str) -> bool {
-        let snippet = snippet!("empty.c");
-        self.build(library, BuildMode::Executable, snippet, Some(library))
             .is_ok()
     }
 }
