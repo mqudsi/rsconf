@@ -183,12 +183,21 @@ impl Detector {
     }
 
     /// Checks whether a definition for `ident` exists in the supplied `header`.
+    ///
     /// This operation does not link the output; only the header file is inspected.
     pub fn is_defined(&self, header: &str, ident: &str) -> bool {
         let snippet = format!(snippet!("is_defined.c"), header, ident);
         self.build(ident, BuildMode::ObjectFile, &snippet, None).is_ok()
     }
 
+    /// Attempts to retrieve the definition of `ident` as an `i32` value. Returns `Ok` in case
+    /// `ident` was defined, has a concrete value, is a compile-time constant (i.e. does not need to
+    /// be linked to retrieve the value), and is a valid `i32` value.
+    ///
+    /// # Note on cross-compilation:
+    ///
+    /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
+    /// require being able to run a binary compiled for the target platform.
     pub fn get_i32_value(&self, header: &str, ident: &str) -> Result<i32, BoxedError> {
         let snippet = format!(snippet!("get_i32_value.c"), header, ident);
         let exe = self.build(ident, BuildMode::Executable, &snippet, None)?;
@@ -202,6 +211,14 @@ impl Detector {
         Ok(std::str::from_utf8(&output.stdout)?.parse()?)
     }
 
+    /// Attempts to retrieve the definition of `ident` as a `u32` value. Returns `Ok` in case
+    /// `ident` was defined, has a concrete value, is a compile-time constant (i.e. does not need to
+    /// be linked to retrieve the value), and is a valid `u32` value.
+    ///
+    /// # Note on cross-compilation:
+    ///
+    /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
+    /// require being able to run a binary compiled for the target platform.
     pub fn get_u32_value(&self, header: &str, ident: &str) -> Result<u32, BoxedError> {
         let snippet = format!(snippet!("get_u32_value.c"), header, ident);
         let exe = self.build(ident, BuildMode::Executable, &snippet, None)?;
@@ -215,6 +232,14 @@ impl Detector {
         Ok(std::str::from_utf8(&output.stdout)?.parse()?)
     }
 
+    /// Attempts to retrieve the definition of `ident` as an `i64` value. Returns `Ok` in case
+    /// `ident` was defined, has a concrete value, is a compile-time constant (i.e. does not need to
+    /// be linked to retrieve the value), and is a valid `i64` value.
+    ///
+    /// # Note on cross-compilation:
+    ///
+    /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
+    /// require being able to run a binary compiled for the target platform.
     pub fn get_i64_value(&self, header: &str, ident: &str) -> Result<i64, BoxedError> {
         let snippet = format!(snippet!("get_i64_value.c"), header, ident);
         let exe = self.build(ident, BuildMode::Executable, &snippet, None)?;
@@ -228,6 +253,14 @@ impl Detector {
         Ok(std::str::from_utf8(&output.stdout)?.parse()?)
     }
 
+    /// Attempts to retrieve the definition of `ident` as a `u64` value. Returns `Ok` in case
+    /// `ident` was defined, has a concrete value, is a compile-time constant (i.e. does not need to
+    /// be linked to retrieve the value), and is a valid `u64` value.
+    ///
+    /// # Note on cross-compilation:
+    ///
+    /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
+    /// require being able to run a binary compiled for the target platform.
     pub fn get_u64_value(&self, header: &str, ident: &str) -> Result<u64, BoxedError> {
         let snippet = format!(snippet!("get_u64_value.c"), header, ident);
         let exe = self.build(ident, BuildMode::Executable, &snippet, None)?;
