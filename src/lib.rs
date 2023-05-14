@@ -207,7 +207,7 @@ impl Detector {
     /// The `headers` are included in the order they are provided. See
     /// [`has_definition()`](Self::has_definition) for more info.
     pub fn has_definition_in(&self, definition: &str, headers: &[&str]) -> bool {
-        let stub = format!("{}_multi", *headers.get(0).unwrap_or(&""));
+        let stub = format!("{}_multi", *headers.get(0).unwrap_or(&"has_definition_in"));
         let headers = to_includes(headers);
         let snippet = format!(snippet!("has_definition.c"), headers, definition);
         self.build(&stub, BuildMode::ObjectFile, &snippet, Self::NONE)
@@ -246,6 +246,10 @@ impl Detector {
 
     /// Returns whether or not it was possible to link against `library`.
     ///
+    /// If it is not possible to link against `library` without also linking against its transitive
+    /// dependencies, use [`has_libraries()`](Self::has_libraries) to link against multiple
+    /// libraries (in the order provided).
+    ///
     /// You should normally pass the name of the library without any prefixes or suffixes. If a
     /// suffix is provided, it will not be removed.
     ///
@@ -259,6 +263,21 @@ impl Detector {
     pub fn has_library(&self, library: &str) -> bool {
         let snippet = snippet!("empty.c");
         self.build(library, BuildMode::ObjectFile, snippet, &[library])
+            .is_ok()
+    }
+
+    /// Returns whether or not it was possible to link against all of `libraries`. See
+    /// [`has_library()`](Self::has_library()) for more information.
+    ///
+    /// Note that the order of linking may influence the outcome of this test. The libraries will be
+    /// linked in the order they are provided in.
+    pub fn has_libraries<S: AsRef<str>>(&self, libraries: &[S]) -> bool {
+        let stub = libraries
+            .get(0)
+            .map(|s| s.as_ref())
+            .unwrap_or("has_libraries");
+        let snippet = snippet!("empty.c");
+        self.build(stub, BuildMode::ObjectFile, snippet, libraries)
             .is_ok()
     }
 
@@ -277,10 +296,10 @@ impl Detector {
     /// A convenience function that links against `libraries` only if they are all found and
     /// linkable.
     ///
-    /// This is internally multiple calls to [`has_library()`](Self::has_library()) followed by a
+    /// This is internally a call to [`has_libraries()`](Self::has_libraries()) followed by a
     /// conditional call to [`link_libraries()`].
     pub fn try_link_libraries<S: AsRef<str>>(&self, libraries: &[S]) -> bool {
-        if libraries.iter().all(|lib| self.has_library(lib.as_ref())) {
+        if self.has_libraries(libraries) {
             link_libraries(libraries);
             return true;
         }
@@ -405,7 +424,7 @@ impl Detector {
     /// Checks whether the [`cc::Build`] passed to [`Detector::new()`] as configured can pull in the
     /// named `headers` in the order they're provided.
     pub fn has_headers<S: AsRef<str>>(&self, headers: &[S]) -> bool {
-        let stub = headers.get(0).map(|s| s.as_ref()).unwrap_or("");
+        let stub = headers.get(0).map(|s| s.as_ref()).unwrap_or("has_headers");
         let snippet = format!(snippet!("has_header.c"), to_includes(headers));
         self.build(stub, BuildMode::ObjectFile, &snippet, Self::NONE)
             .is_ok()
