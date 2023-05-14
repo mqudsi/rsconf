@@ -153,6 +153,7 @@ impl Detector {
             if !link {
                 cmd.arg("/c");
             } else if !libraries.is_empty() {
+                cmd.arg("/link");
                 for library in libraries {
                     let mut library = Cow::from(library.as_ref());
                     if !library.contains('.') {
