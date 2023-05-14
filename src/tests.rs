@@ -77,11 +77,19 @@ fn valid_u32_value_string_ref() {
 }
 
 #[test]
-#[cfg(target_os = "linux")]
+#[cfg(unix)]
 fn dirent_value() {
     let detector = detector();
     let result = detector.get_u32_value("DT_FIFO", "dirent.h");
     assert_eq!(result.unwrap(), 1);
+}
+
+#[test]
+#[cfg(windows)]
+fn generic_read_value() {
+    let detector = detector();
+    let result = detector.get_u32_value("GENERIC_READ", ["windows.h", "fileapi.h"]);
+    assert_eq!(result.unwrap(), 0x80000000);
 }
 
 #[test]
@@ -115,6 +123,17 @@ fn if_none() {
 }
 
 #[test]
+fn custom_define() {
+    let mut build = cc::Build::new();
+    build.define("FOO", "42");
+    let detector = Detector::new(build).unwrap();
+    let result = detector.r#if("FOO == 42", None);
+    assert!(result);
+    let result = detector.r#if("FOO != 42", None);
+    assert!(result == false);
+}
+
+#[test]
 #[cfg(all(unix, target_env = "gnu"))]
 fn if_false() {
     let detector = detector();
@@ -138,10 +157,24 @@ fn if_true() {
 
 #[test]
 #[cfg(unix)]
-fn has_library() {
+fn has_pthread() {
     let detector = detector();
     let result = detector.has_library("pthread");
     assert_eq!(result, true);
+}
+
+#[test]
+#[cfg(windows)]
+fn has_user32() {
+    let detector = detector();
+    assert!(detector.has_library("user32"));
+}
+
+#[test]
+#[cfg(windows)]
+fn has_user32_lib() {
+    let detector = detector();
+    assert!(detector.has_library("user32.lib"));
 }
 
 #[test]
@@ -153,9 +186,17 @@ fn not_has_library() {
 
 #[test]
 #[cfg(unix)]
-fn has_symbol() {
+fn has_symbol_pthread_create() {
     let detector = detector();
     let result = detector.has_symbol("pthread_create", "pthread");
+    assert_eq!(result, true);
+}
+
+#[test]
+#[cfg(windows)]
+fn has_symbol_createfilew() {
+    let detector = detector();
+    let result = detector.has_symbol("CreateFileW", "kernel32.lib");
     assert_eq!(result, true);
 }
 
@@ -168,7 +209,14 @@ fn valid_library_invalid_symbol() {
 }
 
 #[test]
-#[cfg(target_os = "linux")]
+#[cfg(windows)]
+fn valid_library_invalid_symbol() {
+    let detector = detector();
+    let result = detector.has_symbol("createfilew", "kernel32.lib");
+    assert_eq!(result, false);
+}
+
+#[test]
 fn invalid_library_no_symbol() {
     let detector = detector();
     let result = detector.has_symbol("zoonotico", "exhilarate");
