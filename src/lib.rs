@@ -53,21 +53,52 @@ fn output_or_err(output: Output) -> Result<String, BoxedError> {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum BuildMode {
     Executable,
     ObjectFile,
 }
 
+/// Specifies how a dependency library is linked.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub enum LinkType {
+    /// Cargo is instructed to link the library without specifying/overriding how linking is
+    /// performed. If an environment variable `LIBNAME_STATIC` is present, the dependency will be
+    /// statically linked. (This way, downstream consumers of the crate may influence how the
+    /// dependency is linked without modifying the build script and/or features.)
+    #[default]
+    Default,
+    Dynamic,
+    Static,
+}
+
+impl LinkType {
+    fn emit_link_line(&self, lib: &str) {
+        match self {
+            LinkType::Static => println!("cargo:rust-link-lib=static={lib}"),
+            LinkType::Dynamic => println!("cargo:rust-link-lib=dylib={lib}"),
+            LinkType::Default => {
+                // We do not specify the build type unless the LIBNAME_STATIC environment variable
+                // is defined (and not set to 0), in which was we emit a static linkage instruction.
+                let name = format!("{}_STATIC", lib.to_ascii_uppercase());
+                match std::env::var(name).as_deref() {
+                    Err(_) | Ok("0") => println!("cargo:rust-link-lib={lib}"),
+                    _ => LinkType::Static.emit_link_line(lib),
+                }
+            }
+        }
+    }
+}
+
 /// Instruct Cargo to link the target object against `library`.
-pub fn link_library(library: &str) {
-    println!("cargo:rustc-link-lib={library}");
+pub fn link_library(library: &str, how: LinkType) {
+    how.emit_link_line(library)
 }
 
 /// Instruct Cargo to link the target object against `libraries` in the order provided.
-pub fn link_libraries<S: AsRef<str>>(libraries: &[S]) {
+pub fn link_libraries<S: AsRef<str>>(libraries: &[S], how: LinkType) {
     for lib in libraries {
-        println!("cargo:rustc-link-lib={}", lib.as_ref());
+        how.emit_link_line(lib.as_ref())
     }
 }
 
@@ -286,9 +317,9 @@ impl Detector {
     ///
     /// This is internally a call to [`has_library()`](Self::has_library()) followed by a
     /// conditional call to [`link_library()`].
-    pub fn try_link_library(&self, library: &str) -> bool {
+    pub fn try_link_library(&self, library: &str, how: LinkType) -> bool {
         if self.has_library(library) {
-            link_library(library);
+            link_library(library, how);
             return true;
         }
         false
@@ -299,9 +330,9 @@ impl Detector {
     ///
     /// This is internally a call to [`has_libraries()`](Self::has_libraries()) followed by a
     /// conditional call to [`link_libraries()`].
-    pub fn try_link_libraries<S: AsRef<str>>(&self, libraries: &[S]) -> bool {
+    pub fn try_link_libraries<S: AsRef<str>>(&self, libraries: &[S], how: LinkType) -> bool {
         if self.has_libraries(libraries) {
-            link_libraries(libraries);
+            link_libraries(libraries, how);
             return true;
         }
         false
