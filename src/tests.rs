@@ -37,26 +37,26 @@ pub fn detector() -> &'static Detector {
 #[test]
 fn symbol_defined() {
     let detector = detector();
-    assert_eq!(detector.has_definition("stdio.h", "struct FILE"), true);
+    assert_eq!(detector.has_definition("struct FILE", "stdio.h"), true);
 }
 
 #[test]
 #[cfg(unix)]
 fn dir_defined() {
     let detector = detector();
-    assert_eq!(detector.has_definition("dirent.h", "struct DIR"), true);
+    assert_eq!(detector.has_definition("struct DIR", "dirent.h"), true);
 }
 
 #[test]
 fn symbol_not_defined() {
     let detector = detector();
-    assert_eq!(detector.has_definition("stdio.h", "DIR"), false);
+    assert_eq!(detector.has_definition("DIR", "stdio.h"), false);
 }
 
 #[test]
 fn valid_i32_value() {
     let detector = detector();
-    let result = detector.get_i32_value("limits.h", "INT_MIN");
+    let result = detector.get_i32_value("INT_MIN", "limits.h");
     assert_eq!(result.unwrap(), i32::MIN);
 }
 
@@ -64,7 +64,7 @@ fn valid_i32_value() {
 fn invalid_i32_value_borrowed_str() {
     let detector = detector();
     let header = "limits.h".to_owned();
-    let result = detector.get_i32_value(header.as_str(), "LLONG_MAX");
+    let result = detector.get_i32_value("LLONG_MAX", header.as_str());
     assert!(matches!(result, Err(_)));
 }
 
@@ -72,7 +72,7 @@ fn invalid_i32_value_borrowed_str() {
 fn valid_u32_value_string_ref() {
     let detector = detector();
     let header = "limits.h".to_string();
-    let result = detector.get_u32_value(&header, "INT_MAX");
+    let result = detector.get_u32_value("INT_MAX", &header);
     assert_eq!(result.unwrap(), 2147483647);
 }
 
@@ -80,21 +80,21 @@ fn valid_u32_value_string_ref() {
 #[cfg(target_os = "linux")]
 fn dirent_value() {
     let detector = detector();
-    let result = detector.get_u32_value("dirent.h", "DT_FIFO");
+    let result = detector.get_u32_value("DT_FIFO", "dirent.h");
     assert_eq!(result.unwrap(), 1);
 }
 
 #[test]
 fn valid_u64_value() {
     let detector = detector();
-    let result = detector.get_u64_value("limits.h", "LLONG_MAX");
+    let result = detector.get_u64_value("LLONG_MAX", "limits.h");
     assert_eq!(result.unwrap(), 9223372036854775807);
 }
 
 #[test]
-fn has_header_array() {
+fn has_headers() {
     let detector = detector();
-    let result = detector.has_header(["stdint.h", "stdio.h"]);
+    let result = detector.has_headers(&["stdint.h", "stdio.h"]);
     assert_eq!(result, true);
 }
 
@@ -110,7 +110,7 @@ fn not_has_header_string_ref() {
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
 fn if_none() {
     let detector = detector();
-    let result = detector.r#if(None, "__GLIBC_PREREQ(1, 1)");
+    let result = detector.r#if("__GLIBC_PREREQ(1, 1)", None);
     assert_eq!(result, true);
 }
 
@@ -118,26 +118,26 @@ fn if_none() {
 #[cfg(all(unix, target_env = "gnu"))]
 fn if_false() {
     let detector = detector();
-    let result = detector.r#if("stdio.h", "!__GLIBC_PREREQ(10, 3)");
+    let result = detector.r#if("!__GLIBC_PREREQ(10, 3)", "stdio.h");
     assert_eq!(result, true);
 }
 
 #[test]
 fn not_if() {
     let detector = detector();
-    let result = detector.r#if(None, "__FOOO_BAR_12_");
+    let result = detector.r#if("__FOOO_BAR_12_", None);
     assert_eq!(result, false);
 }
 
 #[test]
 fn if_true() {
     let detector = detector();
-    let result = detector.r#if(None, "1");
+    let result = detector.r#if("1", None);
     assert_eq!(result, true);
 }
 
 #[test]
-#[cfg(target_os = "linux")]
+#[cfg(unix)]
 fn has_library() {
     let detector = detector();
     let result = detector.has_library("pthread");
@@ -152,18 +152,18 @@ fn not_has_library() {
 }
 
 #[test]
-#[cfg(target_os = "linux")]
+#[cfg(unix)]
 fn has_symbol() {
     let detector = detector();
-    let result = detector.has_symbol("pthread", "pthread_create");
+    let result = detector.has_symbol("pthread_create", "pthread");
     assert_eq!(result, true);
 }
 
 #[test]
-#[cfg(target_os = "linux")]
+#[cfg(unix)]
 fn valid_library_invalid_symbol() {
     let detector = detector();
-    let result = detector.has_symbol("pthread", "exhilarate");
+    let result = detector.has_symbol("exhilarate", "pthread");
     assert_eq!(result, false);
 }
 

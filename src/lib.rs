@@ -60,6 +60,8 @@ enum BuildMode {
 }
 
 impl Detector {
+    const NONE: &[&'static str] = &[];
+
     /// Create a new rsconf instance from the configured [`cc::Build`] instance `toolchain`.
     ///
     /// All tests inherit their base configuration from `toolchain`, so make sure it is configured
@@ -100,41 +102,14 @@ impl Detector {
         path
     }
 
-    /// Sanitizes a string for use in a file name
-    fn fs_sanitize(s: &str) -> Cow<'_, str> {
-        if s.chars().all(|c| c.is_ascii_alphanumeric()) {
-            return Cow::Borrowed(s);
-        }
-
-        let mut out = String::with_capacity(s.len());
-        for c in s.chars() {
-            if !c.is_ascii_alphanumeric() {
-                out.push('_');
-            } else {
-                out.push(c);
-            }
-        }
-        Cow::Owned(out)
-    }
-
-    fn build(
+    fn build<S: AsRef<str>>(
         &self,
         stub: &str,
         mode: BuildMode,
         code: &str,
-        library: Option<&str>,
+        libraries: &[S],
     ) -> Result<PathBuf, BoxedError> {
-        let stub = Self::fs_sanitize(stub);
-        let mut library = library.map(Cow::from);
-        if cfg!(windows)
-            && library
-                .as_ref()
-                .map(|lib| !lib.contains('.'))
-                .unwrap_or(false)
-        {
-            let owned = library.unwrap().into_owned() + ".lib";
-            library = Some(Cow::from(owned));
-        }
+        let stub = fs_sanitize(stub);
 
         let in_path = self.new_temp(&stub, ".c");
         std::fs::File::create(&in_path)?.write_all(code.as_bytes())?;
@@ -147,13 +122,15 @@ impl Detector {
         let mut cmd = self.toolchain.try_get_compiler()?.to_command();
 
         let exe = mode == BuildMode::Executable;
-        let link = exe || library.is_some();
+        let link = exe || !libraries.is_empty();
         let output = if cfg!(unix) || !self.is_cl {
             cmd.args([in_path.as_os_str(), OsStr::new("-o"), out_path.as_os_str()]);
             if !link {
                 cmd.arg("-c");
-            } else if let Some(library) = library {
-                cmd.arg(format!("-l{library}"));
+            } else if !libraries.is_empty() {
+                for library in libraries {
+                    cmd.arg(format!("-l{}", library.as_ref()));
+                }
             }
             cmd
         } else {
@@ -163,8 +140,15 @@ impl Detector {
             cmd.arg(output);
             if !link {
                 cmd.arg("/c");
-            } else if let Some(library) = library {
-                cmd.arg(&*library);
+            } else if !libraries.is_empty() {
+                for library in libraries {
+                    let mut library = Cow::from(library.as_ref());
+                    if !library.contains('.') {
+                        let owned = library.to_owned() + ".lib";
+                        library = Cow::from(owned);
+                    }
+                    cmd.arg(library.as_ref());
+                }
             }
             cmd
         }
@@ -193,16 +177,35 @@ impl Detector {
         Ok(out_path)
     }
 
-    /// Checks whether a definition for `ident` exists in the supplied `header`.
+    /// Checks whether definition `definition` exists and has a value in the supplied `header`.
+    ///
+    /// If it is not possible to include `header` without including other headers as well (or to
+    /// include no headers), use [`has_definition_in`](Self::has_definition_in) to check for a
+    /// definition after including zero or more headers in the order they are provided.
     ///
     /// This operation does not link the output; only the header file is inspected.
-    pub fn has_definition(&self, header: &str, ident: &str) -> bool {
-        let snippet = format!(snippet!("has_definition.c"), header, ident);
-        self.build(ident, BuildMode::ObjectFile, &snippet, None)
+    pub fn has_definition(&self, definition: &str, header: &str) -> bool {
+        let snippet = format!(snippet!("has_definition.c"), to_include(header), definition);
+        self.build(definition, BuildMode::ObjectFile, &snippet, Self::NONE)
+            .is_ok()
+    }
+
+    /// Checks whether definition `definition` exists and has a value in the supplied `headers`.
+    ///
+    /// The `headers` are included in the order they are provided. See
+    /// [`has_definition()`](Self::has_definition) for more info.
+    pub fn has_definition_in(&self, definition: &str, headers: &[&str]) -> bool {
+        let stub = format!("{}_multi", *headers.get(0).unwrap_or(&""));
+        let headers = to_includes(headers);
+        let snippet = format!(snippet!("has_definition.c"), headers, definition);
+        self.build(&stub, BuildMode::ObjectFile, &snippet, Self::NONE)
             .is_ok()
     }
 
     /// Checks whether or not the the requested `symbol` is exported by `library`.
+    ///
+    /// If `library` cannot be linked without also linking its transitive dependencies, use
+    /// [`has_symbol_in()`](Self::has_symbol_in) to link against multiple libraries and test.
     ///
     /// This only checks for symbols exported by the C abi (so mangled names are required) and does
     /// not check for compile-time definitions provided by header files.
@@ -210,9 +213,22 @@ impl Detector {
     /// See [`has_definition()`](Self::has_definition) to check for compile-time definitions. This
     /// function will return false if `library` could not be found or could not be linked; see
     /// [`has_library()`](Self::has_library) to test if `library` can be linked separately.
-    pub fn has_symbol(&self, library: &str, symbol: &str) -> bool {
+    pub fn has_symbol(&self, symbol: &str, library: &str) -> bool {
         let snippet = format!(snippet!("has_symbol.c"), symbol);
-        self.build(symbol, BuildMode::Executable, &snippet, Some(library))
+        self.build(symbol, BuildMode::Executable, &snippet, &[library])
+            .is_ok()
+    }
+
+    /// Like [`has_symbol()`] but links against any number of `libraries` in the order they are
+    /// provided in.
+    ///
+    /// This can be used when `symbol` is in a library that has its own transitive dependencies that
+    /// must also be linked. See [`has_symbol()`] for more information.
+    ///
+    /// [`has_symbol()`]: Self::has_symbol()
+    pub fn has_symbol_in<S: AsRef<str>>(&self, symbol: &str, libraries: &[S]) -> bool {
+        let snippet = format!(snippet!("has_symbol.c"), symbol);
+        self.build(symbol, BuildMode::Executable, &snippet, libraries)
             .is_ok()
     }
 
@@ -230,7 +246,7 @@ impl Detector {
     /// to testing linking. (This way it works under under both `cl.exe` and `clang.exe`.)
     pub fn has_library(&self, library: &str) -> bool {
         let snippet = snippet!("empty.c");
-        self.build(library, BuildMode::Executable, snippet, Some(library))
+        self.build(library, BuildMode::ObjectFile, snippet, &[library])
             .is_ok()
     }
 
@@ -242,14 +258,14 @@ impl Detector {
     ///
     /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
     /// require being able to run a binary compiled for the target platform.
-    pub fn get_i32_value<'a, H>(&self, header: H, ident: &str) -> Result<i32, BoxedError>
+    pub fn get_i32_value<'a, H>(&self, ident: &str, header: H) -> Result<i32, BoxedError>
     where
         H: Header<'a>,
     {
         let mut h = header.to_header_lines();
         h.push_str(header.preview());
         let snippet = format!(snippet!("get_i32_value.c"), h, ident);
-        let exe = self.build(ident, BuildMode::Executable, &snippet, None)?;
+        let exe = self.build(ident, BuildMode::Executable, &snippet, Self::NONE)?;
 
         let output = Command::new(exe).output().map_err(|err| {
             format!(
@@ -268,12 +284,12 @@ impl Detector {
     ///
     /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
     /// require being able to run a binary compiled for the target platform.
-    pub fn get_u32_value<'a, H>(&self, header: H, ident: &str) -> Result<u32, BoxedError>
+    pub fn get_u32_value<'a, H>(&self, ident: &str, header: H) -> Result<u32, BoxedError>
     where
         H: Header<'a>,
     {
         let snippet = format!(snippet!("get_u32_value.c"), header.to_header_lines(), ident);
-        let exe = self.build(ident, BuildMode::Executable, &snippet, None)?;
+        let exe = self.build(ident, BuildMode::Executable, &snippet, Self::NONE)?;
 
         let output = Command::new(exe).output().map_err(|err| {
             format!(
@@ -292,12 +308,12 @@ impl Detector {
     ///
     /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
     /// require being able to run a binary compiled for the target platform.
-    pub fn get_i64_value<'a, H>(&self, header: H, ident: &str) -> Result<i64, BoxedError>
+    pub fn get_i64_value<'a, H>(&self, ident: &str, header: H) -> Result<i64, BoxedError>
     where
         H: Header<'a>,
     {
         let snippet = format!(snippet!("get_i64_value.c"), header.to_header_lines(), ident);
-        let exe = self.build(ident, BuildMode::Executable, &snippet, None)?;
+        let exe = self.build(ident, BuildMode::Executable, &snippet, Self::NONE)?;
 
         let output = Command::new(exe).output().map_err(|err| {
             format!(
@@ -316,12 +332,12 @@ impl Detector {
     ///
     /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
     /// require being able to run a binary compiled for the target platform.
-    pub fn get_u64_value<'a, H>(&self, header: H, ident: &str) -> Result<u64, BoxedError>
+    pub fn get_u64_value<'a, H>(&self, ident: &str, header: H) -> Result<u64, BoxedError>
     where
         H: Header<'a>,
     {
         let snippet = format!(snippet!("get_u64_value.c"), header.to_header_lines(), ident);
-        let exe = self.build(ident, BuildMode::Executable, &snippet, None)?;
+        let exe = self.build(ident, BuildMode::Executable, &snippet, Self::NONE)?;
 
         let output = Command::new(exe).output().map_err(|err| {
             format!(
@@ -334,12 +350,27 @@ impl Detector {
 
     /// Checks whether the [`cc::Build`] passed to [`Detector::new()`] as configured can pull in the
     /// named `header` file.
-    pub fn has_header<'a, H>(&self, header: H) -> bool
-    where
-        H: Header<'a>,
-    {
-        let snippet = format!(snippet!("has_header.c"), header.to_header_lines());
-        self.build(header.preview(), BuildMode::ObjectFile, &snippet, None)
+    ///
+    /// If including `header` requires pulling in additional headers before it, use
+    /// [`has_headers()`](Self::has_headers) instead to include multiple headers in the order
+    /// they're specified.
+    pub fn has_header(&self, header: &str) -> bool {
+        let snippet = format!(snippet!("has_header.c"), to_include(header));
+        self.build(
+            header.preview(),
+            BuildMode::ObjectFile,
+            &snippet,
+            Self::NONE,
+        )
+        .is_ok()
+    }
+
+    /// Checks whether the [`cc::Build`] passed to [`Detector::new()`] as configured can pull in the
+    /// named `headers` in the order they're provided.
+    pub fn has_headers<S: AsRef<str>>(&self, headers: &[S]) -> bool {
+        let stub = headers.get(0).map(|s| s.as_ref()).unwrap_or("");
+        let snippet = format!(snippet!("has_header.c"), to_includes(headers));
+        self.build(stub, BuildMode::ObjectFile, &snippet, Self::NONE)
             .is_ok()
     }
 
@@ -348,31 +379,64 @@ impl Detector {
     /// This is the C equivalent of `#ifdef xxxx` and does not check if there is a value associated
     /// with the definition. (You can use [`if()`](Self::if()) to test if a define has a particular
     /// value.)
-    pub fn ifdef<'a, H>(&self, header: H, define: &str) -> bool
+    pub fn ifdef<'a, H>(&self, define: &str, headers: H) -> bool
     where
         H: OptionalHeader<'a>,
     {
-        let snippet = format!(snippet!("ifdef.c"), header.to_header_lines(), define);
-        self.build(define, BuildMode::ObjectFile, &snippet, None)
+        let snippet = format!(snippet!("ifdef.c"), headers.to_header_lines(), define);
+        self.build(define, BuildMode::ObjectFile, &snippet, Self::NONE)
             .is_ok()
     }
 
     /// Evaluates whether or not `condition` evaluates to true at preprocessor time.
     ///
-    /// This can be used with `condition` set to `defined(XXX)` to perform the equivalent of
+    /// This can be used with `condition` set to `defined(FOO)` to perform the equivalent of
     /// [`ifdef()`](Self::ifdef) or it can be used to check for specific values e.g. with
-    /// `condition` set to something like `XXX != 0`.
-    pub fn r#if<'a, H>(&self, header: H, condition: &str) -> bool
+    /// `condition` set to something like `FOO != 0`.
+    pub fn r#if<'a, H>(&self, condition: &str, headers: H) -> bool
     where
         H: OptionalHeader<'a>,
     {
-        let snippet = format!(snippet!("if.c"), header.to_header_lines(), condition);
-        self.build(condition, BuildMode::ObjectFile, &snippet, None)
+        let snippet = format!(snippet!("if.c"), headers.to_header_lines(), condition);
+        self.build(condition, BuildMode::ObjectFile, &snippet, Self::NONE)
             .is_ok()
     }
 }
 
+/// Sanitizes a string for use in a file name
+fn fs_sanitize(s: &str) -> Cow<'_, str> {
+    if s.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return Cow::Borrowed(s);
+    }
+
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        if !c.is_ascii_alphanumeric() {
+            out.push('_');
+        } else {
+            out.push(c);
+        }
+    }
+    Cow::Owned(out)
+}
+
+/// Convert header filename `header` to a `#include <..>` statement.
+fn to_include(header: &str) -> String {
+    format!("#include <{}>", header)
+}
+
+fn to_includes<S: AsRef<str>>(headers: &[S]) -> String {
+    let mut vec = Vec::with_capacity(headers.len());
+    // TODO: Use collect_into() once it's stabilized instead of looping.
+    for line in headers.iter().map(|s| s.as_ref()).map(to_include) {
+        vec.push(line);
+    }
+    vec.join("\n")
+}
+
 mod sealed {
+    use crate::{to_include, to_includes};
+
     /// An abstraction to make it possible to check for or include zero or more headers. Headers are
     /// included in the same order they are provided in.
     ///
@@ -384,7 +448,7 @@ mod sealed {
 
     impl<'a> OptionalHeader<'a> for &'a str {
         fn to_header_lines(&self) -> String {
-            format!("#include <{}>", self)
+            to_include(self)
         }
 
         fn preview(&self) -> &'a str {
@@ -404,12 +468,7 @@ mod sealed {
 
     impl<'a> OptionalHeader<'a> for &[&'a str] {
         fn to_header_lines(&self) -> String {
-            let mut vec = Vec::with_capacity(self.len());
-            // TODO: Use collect_into() once it's stabilized instead of looping.
-            for line in self.iter().map(|h| h.to_header_lines()) {
-                vec.push(line);
-            }
-            vec.join("\n")
+            to_includes(self)
         }
 
         fn preview(&self) -> &'a str {

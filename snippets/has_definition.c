@@ -1,4 +1,4 @@
-#include <{0}>
+{0}
 
 int main() {{
 	void *ptr = ({1} *) 0;
