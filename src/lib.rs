@@ -59,6 +59,18 @@ enum BuildMode {
     ObjectFile,
 }
 
+/// Instruct Cargo to link the target object against `library`.
+pub fn link_library(library: &str) {
+    println!("cargo:rustc-link-lib={library}");
+}
+
+/// Instruct Cargo to link the target object against `libraries` in the order provided.
+pub fn link_libraries<S: AsRef<str>>(libraries: &[S]) {
+    for lib in libraries {
+        println!("cargo:rustc-link-lib={}", lib.as_ref());
+    }
+}
+
 impl Detector {
     const NONE: &[&'static str] = &[];
 
@@ -248,6 +260,31 @@ impl Detector {
         let snippet = snippet!("empty.c");
         self.build(library, BuildMode::ObjectFile, snippet, &[library])
             .is_ok()
+    }
+
+    /// A convenience function that links against `library` if it is found and linkable.
+    ///
+    /// This is internally a call to [`has_library()`](Self::has_library()) followed by a
+    /// conditional call to [`link_library()`].
+    pub fn try_link_library(&self, library: &str) -> bool {
+        if self.has_library(library) {
+            link_library(library);
+            return true;
+        }
+        false
+    }
+
+    /// A convenience function that links against `libraries` only if they are all found and
+    /// linkable.
+    ///
+    /// This is internally multiple calls to [`has_library()`](Self::has_library()) followed by a
+    /// conditional call to [`link_libraries()`].
+    pub fn try_link_libraries<S: AsRef<str>>(&self, libraries: &[S]) -> bool {
+        if libraries.iter().all(|lib| self.has_library(lib.as_ref())) {
+            link_libraries(libraries);
+            return true;
+        }
+        false
     }
 
     /// Attempts to retrieve the definition of `ident` as an `i32` value. Returns `Ok` in case
