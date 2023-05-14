@@ -25,7 +25,7 @@ static CC: Lazy<cc::Build> = Lazy::new(|| {
 /// Returns a [`Detector`] instance initialized with the default [`cc::Build`] instance returned by
 /// [`CC`](self::CC).
 static DETECTOR: Lazy<Detector> = Lazy::new(|| {
-    let mut detector = Detector::new(CC.clone()).unwrap();
+    let mut detector = Detector::from(CC.clone());
     detector.set_verbose(true);
     detector
 });
@@ -126,7 +126,7 @@ fn if_none() {
 fn custom_define() {
     let mut build = CC.clone();
     build.define("FOO", "42");
-    let detector = Detector::new(build).unwrap();
+    let detector = Detector::from(build);
     let result = detector.r#if("FOO == 42", None);
     assert!(result);
     let result = detector.r#if("FOO != 42", None);

@@ -105,11 +105,20 @@ pub fn link_libraries<S: AsRef<str>>(libraries: &[S], how: LinkType) {
 impl Detector {
     const NONE: &[&'static str] = &[];
 
+    /// Create a new rsconf instance using the default [`cc::Build`] toolchain for the current
+    /// compilation target.
+    ///
+    /// Use [`Detector::new_from()`] to use a configured [`cc::Build`] instance instead.
+    pub fn new() -> std::io::Result<Detector> {
+        let toolchain = cc::Build::new();
+        Detector::new_from(toolchain)
+    }
+
     /// Create a new rsconf instance from the configured [`cc::Build`] instance `toolchain`.
     ///
     /// All tests inherit their base configuration from `toolchain`, so make sure it is configured
     /// with the appropriate header and library search paths as needed.
-    pub fn new(mut toolchain: cc::Build) -> std::io::Result<Detector> {
+    pub fn new_from(mut toolchain: cc::Build) -> std::io::Result<Detector> {
         let temp = if let Some(out_dir) = std::env::var_os("OUT_DIR") {
             TempDir::new_in(out_dir)?
         } else {
@@ -488,6 +497,12 @@ impl Detector {
         let snippet = format!(snippet!("if.c"), headers.to_header_lines(), condition);
         self.build(condition, BuildMode::ObjectFile, &snippet, Self::NONE)
             .is_ok()
+    }
+}
+
+impl From<cc::Build> for Detector {
+    fn from(build: cc::Build) -> Self {
+        Self::new_from(build).unwrap()
     }
 }
 
