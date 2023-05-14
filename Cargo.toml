@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-cc = { git = "https://github.com/mqudsi/cc-rs.git", branch = "master" }
+cc = { git = "https://github.com/mqudsi/cc-rs.git", branch = "fish" }
 
 [dev-dependencies]
 once_cell = "1.17.1"
