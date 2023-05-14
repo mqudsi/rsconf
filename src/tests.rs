@@ -124,7 +124,7 @@ fn if_none() {
 
 #[test]
 fn custom_define() {
-    let mut build = cc::Build::new();
+    let mut build = CC.clone();
     build.define("FOO", "42");
     let detector = Detector::new(build).unwrap();
     let result = detector.r#if("FOO == 42", None);
@@ -221,4 +221,18 @@ fn invalid_library_no_symbol() {
     let detector = detector();
     let result = detector.has_symbol("zoonotico", "exhilarate");
     assert_eq!(result, false);
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn has_libraries() {
+    let detector = detector();
+    assert!(detector.has_libraries(&["pthread", "dl"]));
+}
+
+#[test]
+#[cfg(windows)]
+fn has_libraries() {
+    let detector = detector();
+    assert!(detector.has_libraries(&["user32", "kernel32.lib"]));
 }
