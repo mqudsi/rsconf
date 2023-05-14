@@ -54,9 +54,25 @@ fn symbol_not_defined() {
 }
 
 #[test]
-fn valid_u32_value() {
+fn valid_i32_value() {
     let detector = detector();
-    let result = detector.get_u32_value("limits.h", "INT_MAX");
+    let result = detector.get_i32_value("limits.h", "INT_MIN");
+    assert_eq!(result.unwrap(), i32::MIN);
+}
+
+#[test]
+fn invalid_i32_value_borrowed_str() {
+    let detector = detector();
+    let header = "limits.h".to_owned();
+    let result = detector.get_i32_value(header.as_str(), "LLONG_MAX");
+    assert!(matches!(result, Err(_)));
+}
+
+#[test]
+fn valid_u32_value_string_ref() {
+    let detector = detector();
+    let header = "limits.h".to_string();
+    let result = detector.get_u32_value(&header, "INT_MAX");
     assert_eq!(result.unwrap(), 2147483647);
 }
 
@@ -76,36 +92,23 @@ fn valid_u64_value() {
 }
 
 #[test]
-fn valid_i32_value() {
+fn has_header_array() {
     let detector = detector();
-    let result = detector.get_i32_value("limits.h", "INT_MIN");
-    assert_eq!(result.unwrap(), i32::MIN);
-}
-
-#[test]
-fn invalid_i32_value() {
-    let detector = detector();
-    let result = detector.get_i32_value("limits.h", "LLONG_MAX");
-    assert!(matches!(result, Err(_)));
-}
-
-#[test]
-fn has_header() {
-    let detector = detector();
-    let result = detector.has_header("stdint.h");
+    let result = detector.has_header(["stdint.h", "stdio.h"]);
     assert_eq!(result, true);
 }
 
 #[test]
-fn not_has_header() {
+fn not_has_header_string_ref() {
     let detector = detector();
-    let result = detector.has_header("f_oobar77.h");
+    let header = "f_oobar77.h".to_owned();
+    let result = detector.has_header(&header);
     assert_eq!(result, false);
 }
 
 #[test]
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
-fn glibc_greater_than_1_1() {
+fn if_none() {
     let detector = detector();
     let result = detector.r#if(None, "__GLIBC_PREREQ(1, 1)");
     assert_eq!(result, true);
@@ -113,9 +116,9 @@ fn glibc_greater_than_1_1() {
 
 #[test]
 #[cfg(all(unix, target_env = "gnu"))]
-fn glibc_less_than_10_3() {
+fn if_false() {
     let detector = detector();
-    let result = detector.r#if(None, "!__GLIBC_PREREQ(10, 3)");
+    let result = detector.r#if("stdio.h", "!__GLIBC_PREREQ(10, 3)");
     assert_eq!(result, true);
 }
 
