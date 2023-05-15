@@ -81,6 +81,7 @@ impl LinkType {
                 // We do not specify the build type unless the LIBNAME_STATIC environment variable
                 // is defined (and not set to 0), in which was we emit a static linkage instruction.
                 let name = format!("{}_STATIC", lib.to_ascii_uppercase());
+                println!("cargo:rerun-if-env-changed={name}");
                 match std::env::var(name).as_deref() {
                     Err(_) | Ok("0") => println!("cargo:rust-link-lib={lib}"),
                     _ => LinkType::Static.emit_link_line(lib),
