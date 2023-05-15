@@ -103,6 +103,51 @@ pub fn link_libraries<S: AsRef<str>>(libraries: &[S], how: LinkType) {
     }
 }
 
+/// Emit a compile-time warning. This is typically only shown for the current crate when building
+/// with `cargo build`, but warnings for non-path dependencies can be shown by using
+/// `cargo build -vv`.
+pub fn warn(msg: &str) {
+    println!("cargo:warning={msg}");
+}
+
+/// Enables a feature flag that can activate conditional code annotated with
+/// `#[cfg(feature = "feature")]. The feature does not have to be named in `Cargo.toml` to be
+/// used here or in your code, but any features dynamically enabled via this script will not
+/// participate in dependency resolution.
+pub fn enable_feature(feature: &str) {
+    if feature.chars().any(|c| c == '"') {
+        panic!("Invalid feature name: {feature}");
+    }
+    println!("cargo:rustc-cfg=feature=\"{feature}\"");
+}
+
+/// Activates conditional compilation for code behind `#[cfg(name)]` or with `if cfg!(name)`
+/// (without quotes around `name`).
+///
+/// See [`set_cfg_value()`] to set a `(name, value)` tuple to enable conditional compilation of the
+/// form `#[cfg(name = "value")]` for cases where `name` is not a boolean cfg but rather takes any
+/// of several discrete values.
+///
+/// Note the different from `#[cfg(feature = "name")]`! The configuration is invisible to end users
+/// of your code (i.e. `name` does not appear anywhere in `Cargo.toml`) and does not participate in
+/// dependency resolution.
+pub fn enable_cfg(name: &str) {
+    println!("cargo:rust-cfg={name}");
+}
+
+/// Activates conditional compilation for code behind `#[cfg(name = "value")]` or with
+/// `if cfg!(name = "value")`.
+///
+/// As with [`enable_cfg()`], this is entirely internal to your code and `name` does not appear in
+/// `Cargo.toml` and this does not participate in dependency resolution (which takes place before
+/// your build script is called).
+pub fn set_cfg_value(name: &str, value: &str) {
+    if value.chars().any(|c| c == '"') {
+        panic!("Invalid value {value} for cfg {name}");
+    }
+    println!("cargo:rust-cfg={name}");
+}
+
 impl Detector {
     const NONE: &[&'static str] = &[];
 
