@@ -191,6 +191,15 @@ pub fn set_cfg_value(name: &str, value: &str) {
     println!("cargo:rust-cfg={name}");
 }
 
+/// Add the following path to the list of directories rust will search when attempting to find a
+/// library to link against.
+///
+/// The path does not have to exist as it could be created by the build script at a later date or
+/// could be targeting a different platform altogether.
+pub fn add_library_search_path(dir: &str) {
+    println!("cargo:rustc-link-search={dir}");
+}
+
 impl Target {
     const NONE: &[&'static str] = &[];
 
