@@ -1,3 +1,4 @@
+use crate as rsconf;
 use crate::Target;
 use once_cell::sync::Lazy;
 
@@ -235,4 +236,26 @@ fn has_libraries() {
 fn has_libraries() {
     let target = target();
     assert!(target.has_libraries(&["user32", "kernel32.lib"]));
+}
+
+#[test]
+fn warn_macro() {
+    rsconf::warn!("hi alone");
+    rsconf::warn!("hello {}", "world");
+    rsconf::warn!("hello {} {}", "happy", "friend");
+}
+
+#[test]
+fn test_paths_invalidation() {
+    // Try with an array directly
+    rsconf::rebuild_if_paths_changed(["foo", "bar"]);
+    // with an array ref
+    rsconf::rebuild_if_paths_changed(&["foo", "bar"]);
+    // with an array of strings
+    rsconf::rebuild_if_paths_changed(&["foo".to_owned(), "bar".to_owned()]);
+    // with a ref to a vector of strings
+    let paths = vec!["foo".to_owned(), "bar".to_owned()];
+    rsconf::rebuild_if_paths_changed(&paths);
+    // with a vector of strings
+    rsconf::rebuild_if_paths_changed(paths);
 }

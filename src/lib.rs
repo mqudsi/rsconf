@@ -105,6 +105,44 @@ pub fn link_libraries<S: AsRef<str>>(libraries: &[S], how: LinkType) {
     }
 }
 
+/// Instruct Cargo to rerun the build script if the following path changes (based off the last
+/// modification time). If the path is to a directory, the build script is re-run if any files under
+/// that directory are modified.
+///
+/// By default, Cargo reruns the build script if any file in the source tree is modified. To make it
+/// ignore changes, specify a file. To make it ignore all changes, call this with `"build.rs"` as
+/// the target.
+pub fn rebuild_if_path_changed(path: &str) {
+    println!("cargo:rerun-if-changed={path}");
+}
+
+/// Instruct Cargo to rerun the build script if any of the following paths change.
+///
+/// See [`rebuild_if_path_modified()`] for more information.
+pub fn rebuild_if_paths_changed<I, S: AsRef<str>>(paths: I)
+where
+    I: IntoIterator<Item = S>,
+{
+    for path in paths {
+        rebuild_if_path_changed(path.as_ref())
+    }
+}
+
+/// Instruct Cargo to rerun the build script if the following environment variable changes.
+pub fn rebuild_if_env_changed(var: &str) {
+    println!("cargo:rerun-if-env-changed={var}");
+}
+
+/// Instruct Cargo to rerun the build script if any of the following environment variables change.
+pub fn rebuild_if_envs_changed<I, S: AsRef<str>>(vars: I)
+where
+    I: IntoIterator<Item = S>,
+{
+    for var in vars {
+        rebuild_if_env_changed(var.as_ref());
+    }
+}
+
 /// Emit a compile-time warning. This is typically only shown for the current crate when building
 /// with `cargo build`, but warnings for non-path dependencies can be shown by using
 /// `cargo build -vv`.
@@ -113,13 +151,6 @@ macro_rules! warn {
     ($msg:tt $(, $($arg:tt)*)?) => {{
         println!(concat!("cargo:warning=", $msg) $(, $($arg)*)?)
     }};
-}
-
-#[test]
-fn warn_macro() {
-    warn!("hi alone");
-    warn!("hello {}", "world");
-    warn!("hello {} {}", "happy", "friend");
 }
 
 /// Enables a feature flag that can activate conditional code annotated with
