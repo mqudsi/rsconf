@@ -106,8 +106,18 @@ pub fn link_libraries<S: AsRef<str>>(libraries: &[S], how: LinkType) {
 /// Emit a compile-time warning. This is typically only shown for the current crate when building
 /// with `cargo build`, but warnings for non-path dependencies can be shown by using
 /// `cargo build -vv`.
-pub fn warn(msg: &str) {
-    println!("cargo:warning={msg}");
+#[macro_export]
+macro_rules! warn {
+    ($msg:tt $(, $($arg:tt)*)?) => {{
+        println!(concat!("cargo:warning=", $msg) $(, $($arg)*)?)
+    }};
+}
+
+#[test]
+fn warn_macro() {
+    warn!("hi alone");
+    warn!("hello {}", "world");
+    warn!("hello {} {}", "happy", "friend");
 }
 
 /// Enables a feature flag that can activate conditional code annotated with
