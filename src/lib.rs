@@ -253,8 +253,8 @@ impl Detector {
                 for library in libraries {
                     let mut library = Cow::from(library.as_ref());
                     if !library.contains('.') {
-                        let owned = library.to_owned() + ".lib";
-                        library = Cow::from(owned);
+                        let owned = library + ".lib";
+                        library = owned;
                     }
                     cmd.arg(library.as_ref());
                 }
@@ -304,7 +304,7 @@ impl Detector {
     /// The `headers` are included in the order they are provided. See
     /// [`has_definition()`](Self::has_definition) for more info.
     pub fn has_definition_in(&self, definition: &str, headers: &[&str]) -> bool {
-        let stub = format!("{}_multi", *headers.get(0).unwrap_or(&"has_definition_in"));
+        let stub = format!("{}_multi", *headers.first().unwrap_or(&"has_definition_in"));
         let headers = to_includes(headers);
         let snippet = format!(snippet!("has_definition.c"), headers, definition);
         self.build(&stub, BuildMode::ObjectFile, &snippet, Self::NONE)
@@ -611,7 +611,7 @@ mod sealed {
         }
 
         fn preview(&self) -> &'a str {
-            *self
+            self
         }
     }
 
@@ -631,7 +631,7 @@ mod sealed {
         }
 
         fn preview(&self) -> &'a str {
-            self.get(0).map(|s| *s).unwrap_or("")
+            self.first().copied().unwrap_or("")
         }
     }
 
