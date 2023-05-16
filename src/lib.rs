@@ -15,7 +15,9 @@ use tempdir::TempDir;
 static FILE_COUNTER: AtomicI32 = AtomicI32::new(0);
 type BoxedError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
-pub struct Detector {
+/// Exposes an interface for testing whether the target system supports a particular feature or
+/// provides certain functionality. This is the bulk of the `rsconf` api.
+pub struct Target {
     /// Whether or not we are compiling with `cl.exe` (and not `clang.exe`) under `xxx-pc-windows-msvc`.
     is_cl: bool,
     temp: TempDir,
@@ -158,23 +160,23 @@ pub fn set_cfg_value(name: &str, value: &str) {
     println!("cargo:rust-cfg={name}");
 }
 
-impl Detector {
+impl Target {
     const NONE: &[&'static str] = &[];
 
     /// Create a new rsconf instance using the default [`cc::Build`] toolchain for the current
     /// compilation target.
     ///
-    /// Use [`Detector::new_from()`] to use a configured [`cc::Build`] instance instead.
-    pub fn new() -> std::io::Result<Detector> {
+    /// Use [`Target::new_from()`] to use a configured [`cc::Build`] instance instead.
+    pub fn new() -> std::io::Result<Target> {
         let toolchain = cc::Build::new();
-        Detector::new_from(toolchain)
+        Target::new_from(toolchain)
     }
 
     /// Create a new rsconf instance from the configured [`cc::Build`] instance `toolchain`.
     ///
     /// All tests inherit their base configuration from `toolchain`, so make sure it is configured
     /// with the appropriate header and library search paths as needed.
-    pub fn new_from(mut toolchain: cc::Build) -> std::io::Result<Detector> {
+    pub fn new_from(mut toolchain: cc::Build) -> std::io::Result<Target> {
         let temp = if let Some(out_dir) = std::env::var_os("OUT_DIR") {
             TempDir::new_in(out_dir)?
         } else {
@@ -353,7 +355,7 @@ impl Detector {
     /// You may pass a full path to the library (again minus the extension) instead of just the
     /// library name in order to try linking against a library not in the library search path.
     /// Alternatively, configure the [`cc::Build`] instance with the search paths as needed before
-    /// passing it to [`Detector::new()`].
+    /// passing it to [`Target::new()`].
     ///
     /// Under Windows, if `library` does not have an extension it will be suffixed with `.lib` prior
     /// to testing linking. (This way it works under under both `cl.exe` and `clang.exe`.)
@@ -501,7 +503,7 @@ impl Detector {
         Ok(std::str::from_utf8(&output.stdout)?.parse()?)
     }
 
-    /// Checks whether the [`cc::Build`] passed to [`Detector::new()`] as configured can pull in the
+    /// Checks whether the [`cc::Build`] passed to [`Target::new()`] as configured can pull in the
     /// named `header` file.
     ///
     /// If including `header` requires pulling in additional headers before it, use
@@ -518,7 +520,7 @@ impl Detector {
         .is_ok()
     }
 
-    /// Checks whether the [`cc::Build`] passed to [`Detector::new()`] as configured can pull in the
+    /// Checks whether the [`cc::Build`] passed to [`Target::new()`] as configured can pull in the
     /// named `headers` in the order they're provided.
     pub fn has_headers<S: AsRef<str>>(&self, headers: &[S]) -> bool {
         let stub = headers.get(0).map(|s| s.as_ref()).unwrap_or("has_headers");
@@ -556,7 +558,7 @@ impl Detector {
     }
 }
 
-impl From<cc::Build> for Detector {
+impl From<cc::Build> for Target {
     fn from(build: cc::Build) -> Self {
         Self::new_from(build).unwrap()
     }
