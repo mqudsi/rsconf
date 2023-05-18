@@ -2,6 +2,13 @@
 name = "rsconf"
 version = "0.1.0"
 edition = "2021"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/mqudsi/rsconf/"
+description = "A sane autoconf for rust. build.rs helpers for testing for system headers, libraries, and symbols"
+authors = [ "Mahmoud Al-Qudsi <mqudsi@neosmart.net>" ]
+keywords = [ "autoconf", "build.rs", "library discovery", "build system" ]
+categories = [ "development-tools::build-utils", "development-tools::ffi", "os", "rust-patterns" ]
 
 [dependencies]
 cc = { git = "https://github.com/mqudsi/cc-rs.git", branch = "fish" }
