@@ -270,6 +270,7 @@ impl Target {
             BuildMode::ObjectFile => self.new_temp(&stub, obj_ext),
         };
         let mut cmd = self.toolchain.try_get_compiler()?.to_command();
+        cmd.current_dir(&self.temp);
 
         let exe = mode == BuildMode::Executable;
         let link = exe || !libraries.is_empty();
