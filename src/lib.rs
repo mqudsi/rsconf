@@ -118,7 +118,7 @@ pub fn rebuild_if_path_changed(path: &str) {
 
 /// Instruct Cargo to rerun the build script if any of the following paths change.
 ///
-/// See [`rebuild_if_path_modified()`] for more information.
+/// See [`rebuild_if_path_changed()`] for more information.
 pub fn rebuild_if_paths_changed<I, S: AsRef<str>>(paths: I)
 where
     I: IntoIterator<Item = S>,

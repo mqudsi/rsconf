@@ -29,7 +29,7 @@ impl TempDir {
         Self::new_in(parent)
     }
 
-    /// Convert the [`TmpDir`] instance into a [`PathBuf`], effectively suppressing the `Drop`
+    /// Convert the [`TempDir`] instance into a [`PathBuf`], effectively suppressing the `Drop`
     /// behavior (i.e. the directory will no longer be automatically deleted).
     #[allow(unused)]
     pub fn into_path(mut self) -> PathBuf {
