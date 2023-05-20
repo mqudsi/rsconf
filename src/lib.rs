@@ -68,9 +68,16 @@ pub enum LinkType {
     /// performed. If an environment variable `LIBNAME_STATIC` is present, the dependency will be
     /// statically linked. (This way, downstream consumers of the crate may influence how the
     /// dependency is linked without modifying the build script and/or features.)
+    ///
+    /// Cargo is instructed to automatically rerun the build script if an environment variable by
+    /// this name exists; you do not have to call [`rebuild_if_env_changed()`] yourself.
     #[default]
     Default,
+    /// Cargo will be instructed to explicitly dynamically link against the target library,
+    /// overriding the default configuration specified by the configuration or the toolchain.
     Dynamic,
+    /// Cargo will be instructed to explicitly statically link against the target library,
+    /// overriding the default configuration specified by the configuration or the toolchain.
     Static,
 }
 
@@ -128,12 +135,12 @@ where
     }
 }
 
-/// Instruct Cargo to rerun the build script if the following environment variable changes.
+/// Instruct Cargo to rerun the build script if the named environment variable changes.
 pub fn rebuild_if_env_changed(var: &str) {
     println!("cargo:rerun-if-env-changed={var}");
 }
 
-/// Instruct Cargo to rerun the build script if any of the following environment variables change.
+/// Instruct Cargo to rerun the build script if any of the named environment variables change.
 pub fn rebuild_if_envs_changed<I, S: AsRef<str>>(vars: I)
 where
     I: IntoIterator<Item = S>,
@@ -143,9 +150,10 @@ where
     }
 }
 
-/// Emit a compile-time warning. This is typically only shown for the current crate when building
-/// with `cargo build`, but warnings for non-path dependencies can be shown by using
-/// `cargo build -vv`.
+/// Emit a compile-time warning.
+///
+/// This is typically only shown for the current crate when building with `cargo build`, but
+/// warnings for non-path dependencies can be shown by using `cargo build -vv`.
 #[macro_export]
 macro_rules! warn {
     ($msg:tt $(, $($arg:tt)*)?) => {{
@@ -153,10 +161,10 @@ macro_rules! warn {
     }};
 }
 
-/// Enables a feature flag that can activate conditional code annotated with
-/// `#[cfg(feature = "feature")]. The feature does not have to be named in `Cargo.toml` to be
-/// used here or in your code, but any features dynamically enabled via this script will not
-/// participate in dependency resolution.
+/// Enables a feature flag that compiles code annotated with `#[cfg(feature = "feature")]`.
+///
+/// The feature does not have to be named in `Cargo.toml` to be used here or in your code, but any
+/// features dynamically enabled via this script will not participate in dependency resolution.
 pub fn enable_feature(feature: &str) {
     if feature.chars().any(|c| c == '"') {
         panic!("Invalid feature name: {feature}");
@@ -164,7 +172,7 @@ pub fn enable_feature(feature: &str) {
     println!("cargo:rustc-cfg=feature=\"{feature}\"");
 }
 
-/// Activates conditional compilation for code behind `#[cfg(name)]` or with `if cfg!(name)`
+/// Enables conditional compilation of code behind `#[cfg(name)]` or with `if cfg!(name)`
 /// (without quotes around `name`).
 ///
 /// See [`set_cfg_value()`] to set a `(name, value)` tuple to enable conditional compilation of the
@@ -178,12 +186,12 @@ pub fn enable_cfg(name: &str) {
     println!("cargo:rust-cfg={name}");
 }
 
-/// Activates conditional compilation for code behind `#[cfg(name = "value")]` or with
-/// `if cfg!(name = "value")`.
+/// Activates conditional compilation for code behind `#[cfg(name = "value")]` or with `if cfg!(name
+/// = "value")`.
 ///
-/// As with [`enable_cfg()`], this is entirely internal to your code and `name` does not appear in
-/// `Cargo.toml` and this does not participate in dependency resolution (which takes place before
-/// your build script is called).
+/// As with [`enable_cfg()`], this is entirely internal to your code, `name` does not appear in
+/// `Cargo.toml`, and this configuration does not participate in dependency resolution (which takes
+/// place before your build script is called).
 pub fn set_cfg_value(name: &str, value: &str) {
     if value.chars().any(|c| c == '"') {
         panic!("Invalid value {value} for cfg {name}");
@@ -191,8 +199,8 @@ pub fn set_cfg_value(name: &str, value: &str) {
     println!("cargo:rust-cfg={name}");
 }
 
-/// Add the following path to the list of directories rust will search when attempting to find a
-/// library to link against.
+/// Add a path to the list of directories rust will search when attempting to find a library to link
+/// against.
 ///
 /// The path does not have to exist as it could be created by the build script at a later date or
 /// could be targeting a different platform altogether.
@@ -421,6 +429,32 @@ impl Target {
             .is_ok()
     }
 
+    /// Checks whether the [`cc::Build`] passed to [`Target::new()`] as configured can pull in the
+    /// named `header` file.
+    ///
+    /// If including `header` requires pulling in additional headers before it, use
+    /// [`has_headers()`](Self::has_headers) instead to include multiple headers in the order
+    /// they're specified.
+    pub fn has_header(&self, header: &str) -> bool {
+        let snippet = format!(snippet!("has_header.c"), to_include(header));
+        self.build(
+            header.preview(),
+            BuildMode::ObjectFile,
+            &snippet,
+            Self::NONE,
+        )
+        .is_ok()
+    }
+
+    /// Checks whether the [`cc::Build`] passed to [`Target::new()`] as configured can pull in the
+    /// named `headers` in the order they're provided.
+    pub fn has_headers<S: AsRef<str>>(&self, headers: &[S]) -> bool {
+        let stub = headers.get(0).map(|s| s.as_ref()).unwrap_or("has_headers");
+        let snippet = format!(snippet!("has_header.c"), to_includes(headers));
+        self.build(stub, BuildMode::ObjectFile, &snippet, Self::NONE)
+            .is_ok()
+    }
+
     /// A convenience function that links against `library` if it is found and linkable.
     ///
     /// This is internally a call to [`has_library()`](Self::has_library()) followed by a
@@ -444,6 +478,34 @@ impl Target {
             return true;
         }
         false
+    }
+
+    /// Evaluates whether or not `define` is an extant preprocessor definition.
+    ///
+    /// This is the C equivalent of `#ifdef xxxx` and does not check if there is a value associated
+    /// with the definition. (You can use [`if()`](Self::if()) to test if a define has a particular
+    /// value.)
+    pub fn ifdef<'a, H>(&self, define: &str, headers: H) -> bool
+    where
+        H: OptionalHeader<'a>,
+    {
+        let snippet = format!(snippet!("ifdef.c"), headers.to_header_lines(), define);
+        self.build(define, BuildMode::ObjectFile, &snippet, Self::NONE)
+            .is_ok()
+    }
+
+    /// Evaluates whether or not `condition` evaluates to true at preprocessor time.
+    ///
+    /// This can be used with `condition` set to `defined(FOO)` to perform the equivalent of
+    /// [`ifdef()`](Self::ifdef) or it can be used to check for specific values e.g. with
+    /// `condition` set to something like `FOO != 0`.
+    pub fn r#if<'a, H>(&self, condition: &str, headers: H) -> bool
+    where
+        H: OptionalHeader<'a>,
+    {
+        let snippet = format!(snippet!("if.c"), headers.to_header_lines(), condition);
+        self.build(condition, BuildMode::ObjectFile, &snippet, Self::NONE)
+            .is_ok()
     }
 
     /// Attempts to retrieve the definition of `ident` as an `i32` value. Returns `Ok` in case
@@ -542,60 +604,6 @@ impl Target {
             )
         })?;
         Ok(std::str::from_utf8(&output.stdout)?.parse()?)
-    }
-
-    /// Checks whether the [`cc::Build`] passed to [`Target::new()`] as configured can pull in the
-    /// named `header` file.
-    ///
-    /// If including `header` requires pulling in additional headers before it, use
-    /// [`has_headers()`](Self::has_headers) instead to include multiple headers in the order
-    /// they're specified.
-    pub fn has_header(&self, header: &str) -> bool {
-        let snippet = format!(snippet!("has_header.c"), to_include(header));
-        self.build(
-            header.preview(),
-            BuildMode::ObjectFile,
-            &snippet,
-            Self::NONE,
-        )
-        .is_ok()
-    }
-
-    /// Checks whether the [`cc::Build`] passed to [`Target::new()`] as configured can pull in the
-    /// named `headers` in the order they're provided.
-    pub fn has_headers<S: AsRef<str>>(&self, headers: &[S]) -> bool {
-        let stub = headers.get(0).map(|s| s.as_ref()).unwrap_or("has_headers");
-        let snippet = format!(snippet!("has_header.c"), to_includes(headers));
-        self.build(stub, BuildMode::ObjectFile, &snippet, Self::NONE)
-            .is_ok()
-    }
-
-    /// Evaluates whether or not `define` is an extant preprocessor definition.
-    ///
-    /// This is the C equivalent of `#ifdef xxxx` and does not check if there is a value associated
-    /// with the definition. (You can use [`if()`](Self::if()) to test if a define has a particular
-    /// value.)
-    pub fn ifdef<'a, H>(&self, define: &str, headers: H) -> bool
-    where
-        H: OptionalHeader<'a>,
-    {
-        let snippet = format!(snippet!("ifdef.c"), headers.to_header_lines(), define);
-        self.build(define, BuildMode::ObjectFile, &snippet, Self::NONE)
-            .is_ok()
-    }
-
-    /// Evaluates whether or not `condition` evaluates to true at preprocessor time.
-    ///
-    /// This can be used with `condition` set to `defined(FOO)` to perform the equivalent of
-    /// [`ifdef()`](Self::ifdef) or it can be used to check for specific values e.g. with
-    /// `condition` set to something like `FOO != 0`.
-    pub fn r#if<'a, H>(&self, condition: &str, headers: H) -> bool
-    where
-        H: OptionalHeader<'a>,
-    {
-        let snippet = format!(snippet!("if.c"), headers.to_header_lines(), condition);
-        self.build(condition, BuildMode::ObjectFile, &snippet, Self::NONE)
-            .is_ok()
     }
 }
 
