@@ -84,15 +84,15 @@ pub enum LinkType {
 impl LinkType {
     fn emit_link_line(&self, lib: &str) {
         match self {
-            LinkType::Static => println!("cargo:rust-link-lib=static={lib}"),
-            LinkType::Dynamic => println!("cargo:rust-link-lib=dylib={lib}"),
+            LinkType::Static => println!("cargo:rustc-link-lib=static={lib}"),
+            LinkType::Dynamic => println!("cargo:rustc-link-lib=dylib={lib}"),
             LinkType::Default => {
                 // We do not specify the build type unless the LIBNAME_STATIC environment variable
                 // is defined (and not set to 0), in which was we emit a static linkage instruction.
                 let name = format!("{}_STATIC", lib.to_ascii_uppercase());
                 println!("cargo:rerun-if-env-changed={name}");
                 match std::env::var(name).as_deref() {
-                    Err(_) | Ok("0") => println!("cargo:rust-link-lib={lib}"),
+                    Err(_) | Ok("0") => println!("cargo:rustc-link-lib={lib}"),
                     _ => LinkType::Static.emit_link_line(lib),
                 }
             }
@@ -183,7 +183,7 @@ pub fn enable_feature(feature: &str) {
 /// of your code (i.e. `name` does not appear anywhere in `Cargo.toml`) and does not participate in
 /// dependency resolution.
 pub fn enable_cfg(name: &str) {
-    println!("cargo:rust-cfg={name}");
+    println!("cargo:rustc-cfg={name}");
 }
 
 /// Activates conditional compilation for code behind `#[cfg(name = "value")]` or with `if cfg!(name
@@ -196,7 +196,7 @@ pub fn set_cfg_value(name: &str, value: &str) {
     if value.chars().any(|c| c == '"') {
         panic!("Invalid value {value} for cfg {name}");
     }
-    println!("cargo:rust-cfg={name}");
+    println!("cargo:rustc-cfg={name}");
 }
 
 /// Add a path to the list of directories rust will search when attempting to find a library to link
