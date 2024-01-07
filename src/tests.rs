@@ -9,7 +9,7 @@ static CC: Lazy<cc::Build> = Lazy::new(|| {
         std::env::set_var("TARGET", "x86_64-pc-windows-msvc");
         #[cfg(target_os = "linux")]
         std::env::set_var("TARGET", "x86_64-linux-unknown-gnu");
-        #[cfg(target_os = "mac_os")]
+        #[cfg(target_os = "macos")]
         std::env::set_var("TARGET", "x86_64-apple-darwin");
         #[cfg(target_os = "freebsd")]
         std::env::set_var("TARGET", "x86_64-unknown-freebsd");
