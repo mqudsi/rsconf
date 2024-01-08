@@ -31,7 +31,7 @@ use rsconf::{LinkType, Target};
 fn find_curses(system: &Target) -> bool {
     // We need to try different library names depending on the platform
     for lib in [ "tinfo", "terminfo" ] {
-        if !system.has_library("lib") {
+        if !system.has_library(lib) {
             continue;
         }
         if system.has_symbol("cur_term", lib)
