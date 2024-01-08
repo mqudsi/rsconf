@@ -1,6 +1,6 @@
 [package]
 name = "rsconf"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
@@ -11,7 +11,8 @@ keywords = [ "autoconf", "build-rs", "library-discovery", "build-tools" ]
 categories = [ "development-tools::build-utils", "development-tools::ffi", "os", "rust-patterns" ]
 
 [dependencies]
-cc = { git = "https://github.com/mqudsi/cc-rs.git", branch = "fish" }
+# cc = { git = "https://github.com/mqudsi/cc-rs.git", branch = "fish" }
+cc = "1.0.83"
 
 [dev-dependencies]
 once_cell = "1.17.1"
