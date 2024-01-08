@@ -209,7 +209,7 @@ pub fn add_library_search_path(dir: &str) {
 }
 
 impl Target {
-    const NONE: &[&'static str] = &[];
+    const NONE: &'static [&'static str] = &[];
 
     /// Create a new rsconf instance using the default [`cc::Build`] toolchain for the current
     /// compilation target.
