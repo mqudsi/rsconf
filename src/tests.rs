@@ -187,6 +187,22 @@ fn not_has_library() {
 
 #[test]
 #[cfg(unix)]
+fn has_symbol_in_libc() {
+    let target = target();
+    let result = target.has_symbol("pipe", "");
+    assert_eq!(result, true);
+}
+
+#[test]
+#[cfg(unix)]
+fn has_symbol_in_libc2() {
+    let target = target();
+    let result = target.has_symbol_in::<&str>("pipe", &[]);
+    assert_eq!(result, true);
+}
+
+#[test]
+#[cfg(unix)]
 fn has_symbol_pthread_create() {
     let target = target();
     let result = target.has_symbol("pthread_create", "pthread");
