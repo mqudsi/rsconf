@@ -375,7 +375,13 @@ impl Target {
     /// [`has_library()`](Self::has_library) to test if `library` can be linked separately.
     pub fn has_symbol(&self, symbol: &str, library: &str) -> bool {
         let snippet = format!(snippet!("has_symbol.c"), symbol);
-        self.build(symbol, BuildMode::Executable, &snippet, &[library])
+        let libs = [library];
+        let libs = if library.is_empty() {
+            &libs[..0]
+        } else {
+            &libs
+        };
+        self.build(symbol, BuildMode::Executable, &snippet, libs)
             .is_ok()
     }
 
