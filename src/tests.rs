@@ -3,22 +3,15 @@ use crate::Target;
 use once_cell::sync::Lazy;
 
 static CC: Lazy<cc::Build> = Lazy::new(|| {
-    // Set TARGET env var if not already set
+    // Set TARGET env var if not already set (set by default for build.rs scripts)
     if std::env::var_os("TARGET").is_none() {
-        #[cfg(windows)]
-        std::env::set_var("TARGET", "x86_64-pc-windows-msvc");
-        #[cfg(target_os = "linux")]
-        std::env::set_var("TARGET", "x86_64-linux-unknown-gnu");
-        #[cfg(target_os = "macos")]
-        std::env::set_var("TARGET", "x86_64-apple-darwin");
-        #[cfg(target_os = "freebsd")]
-        std::env::set_var("TARGET", "x86_64-unknown-freebsd");
+        std::env::set_var("TARGET", env!("RSCONF_TARGET"));
     }
     if std::env::var_os("OPT_LEVEL").is_none() {
         std::env::set_var("OPT_LEVEL", "0");
     }
     if std::env::var_os("HOST").is_none() {
-        std::env::set_var("HOST", std::env::var_os("TARGET").unwrap());
+        std::env::set_var("HOST", env!("RSCONF_HOST"));
     }
     cc::Build::new()
 });
