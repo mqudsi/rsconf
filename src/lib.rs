@@ -196,7 +196,7 @@ pub fn set_cfg_value(name: &str, value: &str) {
     if value.chars().any(|c| c == '"') {
         panic!("Invalid value {value} for cfg {name}");
     }
-    println!("cargo:rustc-cfg={name}");
+    println!("cargo:rustc-cfg={name}=\"{value}\"");
 }
 
 /// Add a path to the list of directories rust will search when attempting to find a library to link
