@@ -344,17 +344,17 @@ impl Target {
     /// Checks whether definition `definition` exists and has a value in the supplied `header`.
     ///
     /// If it is not possible to include `header` without including other headers as well (or to
-    /// include no headers), use [`has_definition_in`](Self::has_definition_in) to check for a
+    /// include no headers), use [`has_type_in`](Self::has_type_in) to check for a
     /// definition after including zero or more headers in the order they are provided.
     ///
     /// This operation does not link the output; only the header file is inspected.
-    pub fn has_definition<'a, H: OptionalHeader<'a>>(
+    pub fn has_type<'a, H: OptionalHeader<'a>>(
         &'a self,
         definition: &str,
         header: H,
     ) -> bool {
         let snippet = format!(
-            snippet!("has_definition.c"),
+            snippet!("has_type.c"),
             header.to_header_lines(),
             definition
         );
@@ -365,11 +365,11 @@ impl Target {
     /// Checks whether definition `definition` exists and has a value in the supplied `headers`.
     ///
     /// The `headers` are included in the order they are provided. See
-    /// [`has_definition()`](Self::has_definition) for more info.
-    pub fn has_definition_in(&self, definition: &str, headers: &[&str]) -> bool {
-        let stub = format!("{}_multi", *headers.first().unwrap_or(&"has_definition_in"));
+    /// [`has_type()`](Self::has_type) for more info.
+    pub fn has_type_in(&self, definition: &str, headers: &[&str]) -> bool {
+        let stub = format!("{}_multi", *headers.first().unwrap_or(&"has_type_in"));
         let headers = to_includes(headers);
-        let snippet = format!(snippet!("has_definition.c"), headers, definition);
+        let snippet = format!(snippet!("has_type.c"), headers, definition);
         self.build(&stub, BuildMode::ObjectFile, &snippet, Self::NONE)
             .is_ok()
     }

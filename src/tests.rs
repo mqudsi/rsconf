@@ -36,29 +36,29 @@ pub fn target() -> &'static Target {
 }
 
 #[test]
-fn symbol_defined() {
+fn struct_defined() {
     let target = target();
-    assert_eq!(target.has_definition("struct FILE", "stdio.h"), true);
+    assert_eq!(target.has_type("struct FILE", "stdio.h"), true);
 }
 
 #[test]
 #[cfg(unix)]
 fn dir_defined_no_struct() {
     let target = target();
-    assert_eq!(target.has_definition("DIR", "dirent.h"), true);
+    assert_eq!(target.has_type("DIR", "dirent.h"), true);
 }
 
 #[test]
 #[cfg(unix)]
 fn dir_defined() {
     let target = target();
-    assert_eq!(target.has_definition("struct DIR", "dirent.h"), true);
+    assert_eq!(target.has_type("struct DIR", "dirent.h"), true);
 }
 
 #[test]
-fn symbol_not_defined() {
+fn struct_not_defined() {
     let target = target();
-    assert_eq!(target.has_definition("DIR", "stdio.h"), false);
+    assert_eq!(target.has_type("DIR", "stdio.h"), false);
 }
 
 #[test]
