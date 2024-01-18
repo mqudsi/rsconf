@@ -43,6 +43,13 @@ fn symbol_defined() {
 
 #[test]
 #[cfg(unix)]
+fn dir_defined_no_struct() {
+    let target = target();
+    assert_eq!(target.has_definition("DIR", "dirent.h"), true);
+}
+
+#[test]
+#[cfg(unix)]
 fn dir_defined() {
     let target = target();
     assert_eq!(target.has_definition("struct DIR", "dirent.h"), true);
@@ -190,6 +197,14 @@ fn not_has_library() {
 fn has_symbol_in_libc() {
     let target = target();
     let result = target.has_symbol("pipe", "");
+    assert_eq!(result, true);
+}
+
+#[test]
+#[cfg(unix)]
+fn has_symbol_in_libc_none() {
+    let target = target();
+    let result = target.has_symbol("pipe", None);
     assert_eq!(result, true);
 }
 

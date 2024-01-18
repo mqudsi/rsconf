@@ -3,7 +3,7 @@ mod tempdir;
 mod tests;
 
 use cc::Build;
-pub use sealed::{Header, OptionalHeader};
+pub use sealed::{Header, OptionalHeader, OptionalLibrary};
 use std::borrow::Cow;
 use std::ffi::{OsStr, OsString};
 use std::io::prelude::*;
@@ -189,8 +189,8 @@ pub fn enable_cfg(name: &str) {
 /// Activates conditional compilation for code behind `#[cfg(name = "value")]` or with `if cfg!(name
 /// = "value")`.
 ///
-/// As with [`enable_cfg()`], this is entirely internal to your code, `name` does not appear in
-/// `Cargo.toml`, and this configuration does not participate in dependency resolution (which takes
+/// As with [`enable_cfg()`], this is entirely internal to your code: `name` should not appear in
+/// `Cargo.toml` and this configuration does not participate in dependency resolution (which takes
 /// place before your build script is called).
 pub fn set_cfg_value(name: &str, value: &str) {
     if value.chars().any(|c| c == '"') {
@@ -246,8 +246,12 @@ impl Target {
 
     /// Enables or disables verbose mode.
     ///
-    /// In verbose mode, compiler output is displayed to stdout and stderr. It is not enabled by
-    /// default.
+    /// In verbose mode, output of rsconf calls to the compiler are displayed to stdout and stderr.
+    /// It is not enabled by default.
+    ///
+    /// Note that `cargo` suppresses all `build.rs` output in case of successful execution by
+    /// default; intentionally fail the build (e.g. add a `panic!()` call) or compile with `cargo
+    /// build -vv` to see verbose output.
     pub fn set_verbose(&mut self, verbose: bool) {
         self.verbose = verbose;
     }
@@ -344,8 +348,16 @@ impl Target {
     /// definition after including zero or more headers in the order they are provided.
     ///
     /// This operation does not link the output; only the header file is inspected.
-    pub fn has_definition(&self, definition: &str, header: &str) -> bool {
-        let snippet = format!(snippet!("has_definition.c"), to_include(header), definition);
+    pub fn has_definition<'a, H: OptionalHeader<'a>>(
+        &'a self,
+        definition: &str,
+        header: H,
+    ) -> bool {
+        let snippet = format!(
+            snippet!("has_definition.c"),
+            header.to_header_lines(),
+            definition
+        );
         self.build(definition, BuildMode::ObjectFile, &snippet, Self::NONE)
             .is_ok()
     }
@@ -373,10 +385,10 @@ impl Target {
     /// See [`has_definition()`](Self::has_definition) to check for compile-time definitions. This
     /// function will return false if `library` could not be found or could not be linked; see
     /// [`has_library()`](Self::has_library) to test if `library` can be linked separately.
-    pub fn has_symbol(&self, symbol: &str, library: &str) -> bool {
+    pub fn has_symbol<'a, L: OptionalLibrary<'a>>(&self, symbol: &str, library: L) -> bool {
         let snippet = format!(snippet!("has_symbol.c"), symbol);
-        let libs = [library];
-        let libs = if library.is_empty() {
+        let libs = [library.preview_lib()];
+        let libs = if libs[0].is_empty() {
             &libs[..0]
         } else {
             &libs
@@ -386,7 +398,7 @@ impl Target {
     }
 
     /// Like [`has_symbol()`] but links against any number of `libraries` in the order they are
-    /// provided in.
+    /// provided.
     ///
     /// This can be used when `symbol` is in a library that has its own transitive dependencies that
     /// must also be linked. See [`has_symbol()`] for more information.
@@ -438,7 +450,7 @@ impl Target {
     /// Checks whether the [`cc::Build`] passed to [`Target::new()`] as configured can pull in the
     /// named `header` file.
     ///
-    /// If including `header` requires pulling in additional headers before it, use
+    /// If including `header` requires pulling in additional headers before it to compile, use
     /// [`has_headers()`](Self::has_headers) instead to include multiple headers in the order
     /// they're specified.
     pub fn has_header(&self, header: &str) -> bool {
@@ -489,7 +501,7 @@ impl Target {
     /// Evaluates whether or not `define` is an extant preprocessor definition.
     ///
     /// This is the C equivalent of `#ifdef xxxx` and does not check if there is a value associated
-    /// with the definition. (You can use [`if()`](Self::if()) to test if a define has a particular
+    /// with the definition. (You can use [`r#if()`](Self::if()) to test if a define has a particular
     /// value.)
     pub fn ifdef<'a, H>(&self, define: &str, headers: H) -> bool
     where
@@ -658,57 +670,70 @@ mod sealed {
     ///
     /// Implemented for all [`Header`] types as well as a literal `None`.
     pub trait OptionalHeader<'a> {
+        #[cfg_attr(debug_assertions, doc(hidden))]
         fn to_header_lines(&self) -> String;
+        #[cfg_attr(debug_assertions, doc(hidden))]
         fn preview(&self) -> &'a str;
     }
 
     impl<'a> OptionalHeader<'a> for &'a str {
+        #[cfg_attr(debug_assertions, doc(hidden))]
         fn to_header_lines(&self) -> String {
             to_include(self)
         }
 
+        #[cfg_attr(debug_assertions, doc(hidden))]
         fn preview(&self) -> &'a str {
             self
         }
     }
 
     impl<'a> OptionalHeader<'a> for &'a String {
+        #[cfg_attr(debug_assertions, doc(hidden))]
         fn to_header_lines(&self) -> String {
             self.as_str().to_header_lines()
         }
 
+        #[cfg_attr(debug_assertions, doc(hidden))]
         fn preview(&self) -> &'a str {
             self.as_str()
         }
     }
 
     impl<'a> OptionalHeader<'a> for &[&'a str] {
+        #[cfg_attr(debug_assertions, doc(hidden))]
         fn to_header_lines(&self) -> String {
             to_includes(self)
         }
 
+        #[cfg_attr(debug_assertions, doc(hidden))]
         fn preview(&self) -> &'a str {
             self.first().copied().unwrap_or("")
         }
     }
 
     impl<'a, const N: usize> OptionalHeader<'a> for [&'a str; N] {
+        #[cfg_attr(debug_assertions, doc(hidden))]
         fn to_header_lines(&self) -> String {
             self.as_slice().to_header_lines()
         }
 
+        #[cfg_attr(debug_assertions, doc(hidden))]
         fn preview(&self) -> &'a str {
             self.as_slice().preview()
         }
     }
 
+    #[cfg_attr(debug_assertions, doc(hidden))]
     pub enum Never {}
 
     impl<'a> OptionalHeader<'a> for Option<Never> {
+        #[cfg_attr(debug_assertions, doc(hidden))]
         fn to_header_lines(&self) -> String {
             String::new()
         }
 
+        #[cfg_attr(debug_assertions, doc(hidden))]
         fn preview(&self) -> &'a str {
             ""
         }
@@ -723,4 +748,34 @@ mod sealed {
     impl<'a> Header<'a> for &'a str {}
     impl<'a> Header<'a> for &'a String {}
     impl<'a, const N: usize> Header<'a> for [&'a str; N] {}
+
+    /// An abstraction to make it possible to check for or include zero or more libraries. Libraries are
+    /// included in the same order they are provided in.
+    ///
+    /// Implemented for all [`Library`] types as well as a literal `None`.
+    pub trait OptionalLibrary<'a> {
+        #[cfg_attr(debug_assertions, doc(hidden))]
+        fn preview_lib(&self) -> &'a str;
+    }
+
+    impl<'a> OptionalLibrary<'a> for &'a str {
+        #[cfg_attr(debug_assertions, doc(hidden))]
+        fn preview_lib(&self) -> &'a str {
+            self
+        }
+    }
+
+    impl<'a> OptionalLibrary<'a> for &'a String {
+        #[cfg_attr(debug_assertions, doc(hidden))]
+        fn preview_lib(&self) -> &'a str {
+            self.as_str()
+        }
+    }
+
+    impl<'a> OptionalLibrary<'a> for Option<Never> {
+        #[cfg_attr(debug_assertions, doc(hidden))]
+        fn preview_lib(&self) -> &'a str {
+            ""
+        }
+    }
 }
