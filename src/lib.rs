@@ -199,6 +199,15 @@ pub fn set_cfg_value(name: &str, value: &str) {
     println!("cargo:rustc-cfg={name}=\"{value}\"");
 }
 
+/// Makes available an environment variable available to your code at build time, letting you use
+/// the value as a compile-time constant with `env!(NAME)`.
+pub fn set_env_value(name: &str, value: &str) {
+    if value.chars().any(|c| c == '"') {
+        panic!("Invalid value {value} for env var {name}");
+    }
+    println!("cargo:rustc-env={name}=\"{value}\"");
+}
+
 /// Add a path to the list of directories rust will search when attempting to find a library to link
 /// against.
 ///
