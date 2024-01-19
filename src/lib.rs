@@ -350,7 +350,7 @@ impl Target {
         Ok(out_path)
     }
 
-    /// Checks whether definition `definition` exists and has a value in the supplied `header`.
+    /// Checks whether a definition for type `type` exists in the supplied `header`.
     ///
     /// If it is not possible to include `header` without including other headers as well (or to
     /// include no headers), use [`has_type_in`](Self::has_type_in) to check for a
@@ -363,9 +363,9 @@ impl Target {
             .is_ok()
     }
 
-    /// Checks whether definition `definition` exists and has a value in the supplied `headers`.
+    /// Checks whether a definition for type `type` exists in the supplied `headers`.
     ///
-    /// The `headers` are included in the order they are provided. See
+    /// The `headers` are included in the order they are provided for testing. See
     /// [`has_type()`](Self::has_type) for more info.
     pub fn has_type_in(&self, definition: &str, headers: &[&str]) -> bool {
         let stub = format!("{}_multi", *headers.first().unwrap_or(&"has_type_in"));
