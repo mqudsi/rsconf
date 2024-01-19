@@ -357,16 +357,8 @@ impl Target {
     /// definition after including zero or more headers in the order they are provided.
     ///
     /// This operation does not link the output; only the header file is inspected.
-    pub fn has_type<'a, H: OptionalHeader<'a>>(
-        &'a self,
-        definition: &str,
-        header: H,
-    ) -> bool {
-        let snippet = format!(
-            snippet!("has_type.c"),
-            header.to_header_lines(),
-            definition
-        );
+    pub fn has_type<'a, H: OptionalHeader<'a>>(&'a self, definition: &str, header: H) -> bool {
+        let snippet = format!(snippet!("has_type.c"), header.to_header_lines(), definition);
         self.build(definition, BuildMode::ObjectFile, &snippet, Self::NONE)
             .is_ok()
     }
@@ -391,7 +383,7 @@ impl Target {
     /// This only checks for symbols exported by the C abi (so mangled names are required) and does
     /// not check for compile-time definitions provided by header files.
     ///
-    /// See [`has_definition()`](Self::has_definition) to check for compile-time definitions. This
+    /// See [`has_type()`](Self::has_type) to check for compile-time definitions. This
     /// function will return false if `library` could not be found or could not be linked; see
     /// [`has_library()`](Self::has_library) to test if `library` can be linked separately.
     pub fn has_symbol<'a, L: OptionalLibrary<'a>>(&self, symbol: &str, library: L) -> bool {
@@ -407,7 +399,7 @@ impl Target {
     }
 
     /// Like [`has_symbol()`] but links against any number of `libraries` in the order they are
-    /// provided.
+    /// provided when testing.
     ///
     /// This can be used when `symbol` is in a library that has its own transitive dependencies that
     /// must also be linked. See [`has_symbol()`] for more information.
@@ -417,6 +409,23 @@ impl Target {
         let snippet = format!(snippet!("has_symbol.c"), symbol);
         self.build(symbol, BuildMode::Executable, &snippet, libraries)
             .is_ok()
+    }
+
+    /// Checks for the presence of all the named symbols, linking against all of `libraries`
+    /// in the order they were provided when testing.
+    ///
+    /// See [`has_symbol()`] and [`has_symbol_in()`] for more information.
+    ///
+    /// [`has_symbol()`]: Self::has_symbol()
+    /// [`has_symbol_in()`]: Self::has_symbol_in()
+    pub fn has_symbols_in<S1: AsRef<str>, S2: AsRef<str>>(
+        &self,
+        symbols: &[S1],
+        libraries: &[S2],
+    ) -> bool {
+        symbols
+            .iter()
+            .all(|symbol| self.has_symbol_in(symbol.as_ref(), libraries))
     }
 
     /// Returns whether or not it was possible to link against `library`.
@@ -445,7 +454,7 @@ impl Target {
     /// [`has_library()`](Self::has_library()) for more information.
     ///
     /// Note that the order of linking may influence the outcome of this test. The libraries will be
-    /// linked in the order they are provided in.
+    /// linked in the order they are provided in when testing.
     pub fn has_libraries<S: AsRef<str>>(&self, libraries: &[S]) -> bool {
         let stub = libraries
             .get(0)
@@ -454,6 +463,40 @@ impl Target {
         let snippet = snippet!("empty.c");
         self.build(stub, BuildMode::ObjectFile, snippet, libraries)
             .is_ok()
+    }
+
+    /// Returns a reference to the first library name that was passed in that was ultimately found
+    /// on the target system, or `None` if none were found. See
+    /// [`has_library()`](Self::has_library()) for more information.
+    pub fn find_first_library<'a, S: AsRef<str>>(&self, libraries: &'a [S]) -> Option<&'a str> {
+        for lib in libraries {
+            if self.has_library(lib.as_ref()) {
+                return Some(lib.as_ref());
+            }
+        }
+        None
+    }
+
+    /// Returns a reference to the first library name that was passed in that was ultimately found
+    /// on the target system and contains all the symbol names provided, or `None` if no such
+    /// library was found. See [`has_library()`](Self::has_library()) and [`has_symbol()`] for more
+    /// information.
+    ///
+    /// [`has_symbol()`]: Self::has_symbol()
+    pub fn find_first_library_with<'a, S1: AsRef<str>, S2: AsRef<str>>(
+        &self,
+        libraries: &'a [S1],
+        symbols: &[S2],
+    ) -> Option<&'a str> {
+        for lib in libraries {
+            if !self.has_library(lib.as_ref()) {
+                continue;
+            }
+            if self.has_symbols_in(symbols, &[lib]) {
+                return Some(lib.as_ref());
+            }
+        }
+        None
     }
 
     /// Checks whether the [`cc::Build`] passed to [`Target::new()`] as configured can pull in the
@@ -761,7 +804,7 @@ mod sealed {
     /// An abstraction to make it possible to check for or include zero or more libraries. Libraries are
     /// included in the same order they are provided in.
     ///
-    /// Implemented for all [`Library`] types as well as a literal `None`.
+    /// Implemented for `String` and `&str` types as well as a literal `None`.
     pub trait OptionalLibrary<'a> {
         #[cfg_attr(debug_assertions, doc(hidden))]
         fn preview_lib(&self) -> &'a str;
