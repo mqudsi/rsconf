@@ -31,27 +31,47 @@ pub fn target() -> &'static Target {
 #[test]
 fn struct_defined() {
     let target = target();
-    assert_eq!(target.has_type("struct FILE", "stdio.h"), true);
+    assert_eq!(target.has_type_in("struct FILE", "stdio.h"), true);
+    assert_eq!(target.has_type_in("struct FILE", ["stdio.h"]), true);
+    assert_eq!(target.has_type_in("struct FILE", &["stdio.h"]), true);
+    assert_eq!(
+        target.has_type_in("struct FILE", &["stdio.h".to_owned()]),
+        true
+    );
+    assert_eq!(
+        target.has_type_in("struct FILE", &&["stdio.h".to_owned()]),
+        true
+    );
+    assert_eq!(
+        target.has_type_in("struct FILE", "stdio.h".to_owned()),
+        true
+    );
+}
+
+#[test]
+fn long_long_defined() {
+    let target = target();
+    assert_eq!(target.has_type("long long"), true);
 }
 
 #[test]
 #[cfg(unix)]
 fn dir_defined_no_struct() {
     let target = target();
-    assert_eq!(target.has_type("DIR", "dirent.h"), true);
+    assert_eq!(target.has_type_in("DIR", "dirent.h"), true);
 }
 
 #[test]
 #[cfg(unix)]
 fn dir_defined() {
     let target = target();
-    assert_eq!(target.has_type("struct DIR", "dirent.h"), true);
+    assert_eq!(target.has_type_in("struct DIR", "dirent.h"), true);
 }
 
 #[test]
 fn struct_not_defined() {
     let target = target();
-    assert_eq!(target.has_type("DIR", "stdio.h"), false);
+    assert_eq!(target.has_type_in("DIR", "stdio.h"), false);
 }
 
 #[test]
@@ -189,23 +209,7 @@ fn not_has_library() {
 #[cfg(unix)]
 fn has_symbol_in_libc() {
     let target = target();
-    let result = target.has_symbol("pipe", "");
-    assert_eq!(result, true);
-}
-
-#[test]
-#[cfg(unix)]
-fn has_symbol_in_libc_none() {
-    let target = target();
-    let result = target.has_symbol("pipe", None);
-    assert_eq!(result, true);
-}
-
-#[test]
-#[cfg(unix)]
-fn has_symbol_in_libc2() {
-    let target = target();
-    let result = target.has_symbol_in::<&str>("pipe", &[]);
+    let result = target.has_symbol("pipe");
     assert_eq!(result, true);
 }
 
@@ -213,7 +217,7 @@ fn has_symbol_in_libc2() {
 #[cfg(unix)]
 fn has_symbol_pthread_create() {
     let target = target();
-    let result = target.has_symbol("pthread_create", "pthread");
+    let result = target.has_symbol_in("pthread_create", "pthread");
     assert_eq!(result, true);
 }
 
@@ -221,7 +225,7 @@ fn has_symbol_pthread_create() {
 #[cfg(windows)]
 fn has_symbol_createfilew() {
     let target = target();
-    let result = target.has_symbol("CreateFileW", "kernel32.lib");
+    let result = target.has_symbol_in("CreateFileW", "kernel32.lib");
     assert_eq!(result, true);
 }
 
@@ -229,7 +233,7 @@ fn has_symbol_createfilew() {
 #[cfg(unix)]
 fn valid_library_invalid_symbol() {
     let target = target();
-    let result = target.has_symbol("exhilarate", "pthread");
+    let result = target.has_symbol_in("exhilarate", "pthread");
     assert_eq!(result, false);
 }
 
@@ -237,14 +241,14 @@ fn valid_library_invalid_symbol() {
 #[cfg(windows)]
 fn valid_library_invalid_symbol() {
     let target = target();
-    let result = target.has_symbol("createfilew", "kernel32.lib");
+    let result = target.has_symbol_in("createfilew", "kernel32.lib");
     assert_eq!(result, false);
 }
 
 #[test]
 fn invalid_library_no_symbol() {
     let target = target();
-    let result = target.has_symbol("zoonotico", "exhilarate");
+    let result = target.has_symbol_in("zoonotico", "exhilarate");
     assert_eq!(result, false);
 }
 

@@ -3,7 +3,7 @@ mod tempdir;
 mod tests;
 
 use cc::Build;
-pub use sealed::{Header, OptionalHeader, OptionalLibrary};
+pub use sealed::{Header, Library};
 use std::borrow::Cow;
 use std::ffi::{OsStr, OsString};
 use std::io::prelude::*;
@@ -350,35 +350,40 @@ impl Target {
         Ok(out_path)
     }
 
-    /// Checks whether a definition for type `type` exists in the supplied `header`.
+    /// Checks whether a definition for type `name` exists without pulling in any headers.
     ///
     /// If it is not possible to include `header` without including other headers as well (or to
     /// include no headers), use [`has_type_in`](Self::has_type_in) to check for a
     /// definition after including zero or more headers in the order they are provided.
     ///
     /// This operation does not link the output; only the header file is inspected.
-    pub fn has_type<'a, H: OptionalHeader<'a>>(&'a self, definition: &str, header: H) -> bool {
-        let snippet = format!(snippet!("has_type.c"), header.to_header_lines(), definition);
-        self.build(definition, BuildMode::ObjectFile, &snippet, Self::NONE)
+    pub fn has_type(&self, name: &str) -> bool {
+        let snippet = format!(snippet!("has_type.c"), "", name);
+        self.build(name, BuildMode::ObjectFile, &snippet, Self::NONE)
             .is_ok()
     }
 
-    /// Checks whether a definition for type `type` exists in the supplied `headers`.
+    /// Checks whether a definition for type `name` exists in the supplied header or headers.
     ///
     /// The `headers` are included in the order they are provided for testing. See
     /// [`has_type()`](Self::has_type) for more info.
-    pub fn has_type_in(&self, definition: &str, headers: &[&str]) -> bool {
-        let stub = format!("{}_multi", *headers.first().unwrap_or(&"has_type_in"));
-        let headers = to_includes(headers);
-        let snippet = format!(snippet!("has_type.c"), headers, definition);
+    pub fn has_type_in<H: Header>(&self, name: &str, headers: H) -> bool {
+        let stub = format!(
+            "{}_multi",
+            match headers.preview() {
+                "" => "has_type_in",
+                first => first,
+            }
+        );
+        let snippet = format!(snippet!("has_type.c"), headers.to_header_lines(), name);
         self.build(&stub, BuildMode::ObjectFile, &snippet, Self::NONE)
             .is_ok()
     }
 
-    /// Checks whether or not the the requested `symbol` is exported by `library`.
+    /// Checks whether or not the the requested `symbol` is exported by libc/by default (without
+    /// linking against any additional libraries).
     ///
-    /// If `library` cannot be linked without also linking its transitive dependencies, use
-    /// [`has_symbol_in()`](Self::has_symbol_in) to link against multiple libraries and test.
+    /// See [`has_symbol_in()`](Self::has_symbol_in) to link against one or more libraries and test.
     ///
     /// This only checks for symbols exported by the C abi (so mangled names are required) and does
     /// not check for compile-time definitions provided by header files.
@@ -386,46 +391,46 @@ impl Target {
     /// See [`has_type()`](Self::has_type) to check for compile-time definitions. This
     /// function will return false if `library` could not be found or could not be linked; see
     /// [`has_library()`](Self::has_library) to test if `library` can be linked separately.
-    pub fn has_symbol<'a, L: OptionalLibrary<'a>>(&self, symbol: &str, library: L) -> bool {
+    pub fn has_symbol(&self, symbol: &str) -> bool {
         let snippet = format!(snippet!("has_symbol.c"), symbol);
-        let libs = [library.preview_lib()];
-        let libs = if libs[0].is_empty() {
-            &libs[..0]
-        } else {
-            &libs
-        };
+        let libs: &'static [&'static str] = &[];
         self.build(symbol, BuildMode::Executable, &snippet, libs)
             .is_ok()
     }
 
-    /// Like [`has_symbol()`] but links against any number of `libraries` in the order they are
-    /// provided when testing.
+    /// Like [`has_symbol()`] but links against a library or any number of `libraries` in the order
+    /// they are provided when testing.
     ///
     /// This can be used when `symbol` is in a library that has its own transitive dependencies that
-    /// must also be linked. See [`has_symbol()`] for more information.
+    /// must also be linked by passing in an array or slice of libraries to link when searching.
     ///
     /// [`has_symbol()`]: Self::has_symbol()
-    pub fn has_symbol_in<S: AsRef<str>>(&self, symbol: &str, libraries: &[S]) -> bool {
+    pub fn has_symbol_in<'a, L: Library>(&self, symbol: &str, libraries: L) -> bool {
         let snippet = format!(snippet!("has_symbol.c"), symbol);
-        self.build(symbol, BuildMode::Executable, &snippet, libraries)
-            .is_ok()
+        self.build(
+            symbol,
+            BuildMode::Executable,
+            &snippet,
+            libraries.as_lib_slice(),
+        )
+        .is_ok()
     }
 
-    /// Checks for the presence of all the named symbols, linking against all of `libraries`
+    /// Checks for the presence of all the named symbols, linking against one or more libraries
     /// in the order they were provided when testing.
     ///
     /// See [`has_symbol()`] and [`has_symbol_in()`] for more information.
     ///
     /// [`has_symbol()`]: Self::has_symbol()
     /// [`has_symbol_in()`]: Self::has_symbol_in()
-    pub fn has_symbols_in<S1: AsRef<str>, S2: AsRef<str>>(
+    pub fn has_symbols_in<'b, S1: AsRef<str>, L: Library>(
         &self,
         symbols: &[S1],
-        libraries: &[S2],
+        libraries: L,
     ) -> bool {
         symbols
             .iter()
-            .all(|symbol| self.has_symbol_in(symbol.as_ref(), libraries))
+            .all(|symbol| self.has_symbol_in(symbol.as_ref(), &libraries))
     }
 
     /// Returns whether or not it was possible to link against `library`.
@@ -492,7 +497,7 @@ impl Target {
             if !self.has_library(lib.as_ref()) {
                 continue;
             }
-            if self.has_symbols_in(symbols, &[lib]) {
+            if self.has_symbols_in(symbols, lib.as_ref()) {
                 return Some(lib.as_ref());
             }
         }
@@ -555,10 +560,7 @@ impl Target {
     /// This is the C equivalent of `#ifdef xxxx` and does not check if there is a value associated
     /// with the definition. (You can use [`r#if()`](Self::if()) to test if a define has a particular
     /// value.)
-    pub fn ifdef<'a, H>(&self, define: &str, headers: H) -> bool
-    where
-        H: OptionalHeader<'a>,
-    {
+    pub fn ifdef<H: Header>(&self, define: &str, headers: H) -> bool {
         let snippet = format!(snippet!("ifdef.c"), headers.to_header_lines(), define);
         self.build(define, BuildMode::ObjectFile, &snippet, Self::NONE)
             .is_ok()
@@ -569,10 +571,7 @@ impl Target {
     /// This can be used with `condition` set to `defined(FOO)` to perform the equivalent of
     /// [`ifdef()`](Self::ifdef) or it can be used to check for specific values e.g. with
     /// `condition` set to something like `FOO != 0`.
-    pub fn r#if<'a, H>(&self, condition: &str, headers: H) -> bool
-    where
-        H: OptionalHeader<'a>,
-    {
+    pub fn r#if<H: Header>(&self, condition: &str, headers: H) -> bool {
         let snippet = format!(snippet!("if.c"), headers.to_header_lines(), condition);
         self.build(condition, BuildMode::ObjectFile, &snippet, Self::NONE)
             .is_ok()
@@ -586,13 +585,8 @@ impl Target {
     ///
     /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
     /// require being able to run a binary compiled for the target platform.
-    pub fn get_i32_value<'a, H>(&self, ident: &str, header: H) -> Result<i32, BoxedError>
-    where
-        H: Header<'a>,
-    {
-        let mut h = header.to_header_lines();
-        h.push_str(header.preview());
-        let snippet = format!(snippet!("get_i32_value.c"), h, ident);
+    pub fn get_i32_value<H: Header>(&self, ident: &str, header: H) -> Result<i32, BoxedError> {
+        let snippet = format!(snippet!("get_i32_value.c"), header.to_header_lines(), ident);
         let exe = self.build(ident, BuildMode::Executable, &snippet, Self::NONE)?;
 
         let output = Command::new(exe).output().map_err(|err| {
@@ -612,10 +606,7 @@ impl Target {
     ///
     /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
     /// require being able to run a binary compiled for the target platform.
-    pub fn get_u32_value<'a, H>(&self, ident: &str, header: H) -> Result<u32, BoxedError>
-    where
-        H: Header<'a>,
-    {
+    pub fn get_u32_value<H: Header>(&self, ident: &str, header: H) -> Result<u32, BoxedError> {
         let snippet = format!(snippet!("get_u32_value.c"), header.to_header_lines(), ident);
         let exe = self.build(ident, BuildMode::Executable, &snippet, Self::NONE)?;
 
@@ -636,10 +627,7 @@ impl Target {
     ///
     /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
     /// require being able to run a binary compiled for the target platform.
-    pub fn get_i64_value<'a, H>(&self, ident: &str, header: H) -> Result<i64, BoxedError>
-    where
-        H: Header<'a>,
-    {
+    pub fn get_i64_value<H: Header>(&self, ident: &str, header: H) -> Result<i64, BoxedError> {
         let snippet = format!(snippet!("get_i64_value.c"), header.to_header_lines(), ident);
         let exe = self.build(ident, BuildMode::Executable, &snippet, Self::NONE)?;
 
@@ -660,10 +648,7 @@ impl Target {
     ///
     /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
     /// require being able to run a binary compiled for the target platform.
-    pub fn get_u64_value<'a, H>(&self, ident: &str, header: H) -> Result<u64, BoxedError>
-    where
-        H: Header<'a>,
-    {
+    pub fn get_u64_value<H: Header>(&self, ident: &str, header: H) -> Result<u64, BoxedError> {
         let snippet = format!(snippet!("get_u64_value.c"), header.to_header_lines(), ident);
         let exe = self.build(ident, BuildMode::Executable, &snippet, Self::NONE)?;
 
@@ -717,117 +702,155 @@ fn to_includes<S: AsRef<str>>(headers: &[S]) -> String {
 mod sealed {
     use crate::{to_include, to_includes};
 
+    #[cfg_attr(debug_assertions, doc(hidden))]
+    pub enum Never {}
+
     /// An abstraction to make it possible to check for or include zero or more headers. Headers are
     /// included in the same order they are provided in.
     ///
     /// Implemented for all [`Header`] types as well as a literal `None`.
-    pub trait OptionalHeader<'a> {
+    pub trait Header {
         #[cfg_attr(debug_assertions, doc(hidden))]
         fn to_header_lines(&self) -> String;
         #[cfg_attr(debug_assertions, doc(hidden))]
-        fn preview(&self) -> &'a str;
+        fn preview(&self) -> &str;
     }
 
-    impl<'a> OptionalHeader<'a> for &'a str {
+    impl Header for &str {
         #[cfg_attr(debug_assertions, doc(hidden))]
         fn to_header_lines(&self) -> String {
             to_include(self)
         }
 
         #[cfg_attr(debug_assertions, doc(hidden))]
-        fn preview(&self) -> &'a str {
+        fn preview(&self) -> &str {
             self
         }
     }
 
-    impl<'a> OptionalHeader<'a> for &'a String {
+    impl Header for String {
         #[cfg_attr(debug_assertions, doc(hidden))]
         fn to_header_lines(&self) -> String {
             self.as_str().to_header_lines()
         }
 
         #[cfg_attr(debug_assertions, doc(hidden))]
-        fn preview(&self) -> &'a str {
+        fn preview(&self) -> &str {
             self.as_str()
         }
     }
 
-    impl<'a> OptionalHeader<'a> for &[&'a str] {
+    impl Header for &[&str] {
         #[cfg_attr(debug_assertions, doc(hidden))]
         fn to_header_lines(&self) -> String {
             to_includes(self)
         }
 
         #[cfg_attr(debug_assertions, doc(hidden))]
-        fn preview(&self) -> &'a str {
+        fn preview(&self) -> &str {
             self.first().copied().unwrap_or("")
         }
     }
 
-    impl<'a, const N: usize> OptionalHeader<'a> for [&'a str; N] {
+    impl Header for Option<Never> {
         #[cfg_attr(debug_assertions, doc(hidden))]
         fn to_header_lines(&self) -> String {
-            self.as_slice().to_header_lines()
+            "".to_owned()
         }
 
         #[cfg_attr(debug_assertions, doc(hidden))]
-        fn preview(&self) -> &'a str {
-            self.as_slice().preview()
-        }
-    }
-
-    #[cfg_attr(debug_assertions, doc(hidden))]
-    pub enum Never {}
-
-    impl<'a> OptionalHeader<'a> for Option<Never> {
-        #[cfg_attr(debug_assertions, doc(hidden))]
-        fn to_header_lines(&self) -> String {
-            String::new()
-        }
-
-        #[cfg_attr(debug_assertions, doc(hidden))]
-        fn preview(&self) -> &'a str {
+        fn preview(&self) -> &str {
             ""
         }
     }
 
-    /// An abstraction to make it possible to check for or include one or more headers. Headers are
-    /// included in the same order they are provided in.
-    ///
-    /// Implemented for `&str`, `&String`, `&[&str]`, and `[&str; N]`.
-    pub trait Header<'a>: OptionalHeader<'a> {}
-
-    impl<'a> Header<'a> for &'a str {}
-    impl<'a> Header<'a> for &'a String {}
-    impl<'a, const N: usize> Header<'a> for [&'a str; N] {}
-
-    /// An abstraction to make it possible to check for or include zero or more libraries. Libraries are
-    /// included in the same order they are provided in.
-    ///
-    /// Implemented for `String` and `&str` types as well as a literal `None`.
-    pub trait OptionalLibrary<'a> {
+    impl<const N: usize, S: AsRef<str>> Header for [S; N] {
         #[cfg_attr(debug_assertions, doc(hidden))]
-        fn preview_lib(&self) -> &'a str;
+        fn to_header_lines(&self) -> String {
+            to_includes(self)
+        }
+
+        #[cfg_attr(debug_assertions, doc(hidden))]
+        fn preview(&self) -> &str {
+            self.first().map(|s| s.as_ref()).unwrap_or("")
+        }
     }
 
-    impl<'a> OptionalLibrary<'a> for &'a str {
+    impl<H: Header> Header for &H {
         #[cfg_attr(debug_assertions, doc(hidden))]
-        fn preview_lib(&self) -> &'a str {
+        fn to_header_lines(&self) -> String {
+            (*self).to_header_lines()
+        }
+
+        #[cfg_attr(debug_assertions, doc(hidden))]
+        fn preview(&self) -> &str {
+            (*self).preview()
+        }
+    }
+
+    /// An abstraction to make it possible to check for or include zero or more libraries. Libraries
+    /// are included in the same order they are provided in.
+    ///
+    /// Implemented for `String` and `&str` types as well as a literal `None`.
+    pub trait Library {
+        #[cfg_attr(debug_assertions, doc(hidden))]
+        fn preview_lib(&self) -> &str;
+        #[cfg_attr(debug_assertions, doc(hidden))]
+        fn as_lib_slice<'a>(&'a self) -> &'a [impl AsRef<str>];
+    }
+
+    impl Library for &str {
+        #[cfg_attr(debug_assertions, doc(hidden))]
+        fn preview_lib(&self) -> &str {
+            self
+        }
+        #[cfg_attr(debug_assertions, doc(hidden))]
+        fn as_lib_slice<'a>(&'a self) -> &'a [impl AsRef<str>] {
+            std::slice::from_ref(self)
+        }
+    }
+
+    impl Library for String {
+        #[cfg_attr(debug_assertions, doc(hidden))]
+        fn preview_lib(&self) -> &str {
+            self.as_str()
+        }
+        #[cfg_attr(debug_assertions, doc(hidden))]
+        fn as_lib_slice(&self) -> &[impl AsRef<str>] {
+            std::slice::from_ref(self)
+        }
+    }
+
+    impl Library for [&str] {
+        #[cfg_attr(debug_assertions, doc(hidden))]
+        fn preview_lib(&self) -> &str {
+            self.first().unwrap_or(&"")
+        }
+        #[cfg_attr(debug_assertions, doc(hidden))]
+        fn as_lib_slice(&self) -> &[impl AsRef<str>] {
             self
         }
     }
 
-    impl<'a> OptionalLibrary<'a> for &'a String {
+    impl<const N: usize, S: AsRef<str>> Library for [S; N] {
         #[cfg_attr(debug_assertions, doc(hidden))]
-        fn preview_lib(&self) -> &'a str {
-            self.as_str()
+        fn preview_lib(&self) -> &str {
+            self.first().map(|s| s.as_ref()).unwrap_or("")
+        }
+        #[cfg_attr(debug_assertions, doc(hidden))]
+        fn as_lib_slice<'a>(&'a self) -> &'a [impl AsRef<str>] {
+            self
         }
     }
 
-    impl<'a> OptionalLibrary<'a> for Option<Never> {
+    impl<OL: Library> Library for &OL {
         #[cfg_attr(debug_assertions, doc(hidden))]
-        fn preview_lib(&self) -> &'a str {
-            ""
+        fn preview_lib(&self) -> &str {
+            (*self).preview_lib()
+        }
+        #[cfg_attr(debug_assertions, doc(hidden))]
+        fn as_lib_slice(&self) -> &[impl AsRef<str>] {
+            (*self).as_lib_slice()
         }
     }
 }
