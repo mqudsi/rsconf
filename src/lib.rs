@@ -794,62 +794,82 @@ mod sealed {
     /// Implemented for `String` and `&str` types as well as a literal `None`.
     pub trait Library {
         #[cfg_attr(debug_assertions, doc(hidden))]
+        type S<'s>: AsRef<str>
+        where
+            Self: 's;
+
+        #[cfg_attr(debug_assertions, doc(hidden))]
         fn preview_lib(&self) -> &str;
         #[cfg_attr(debug_assertions, doc(hidden))]
-        fn as_lib_slice<'a>(&'a self) -> &'a [impl AsRef<str>];
+        fn as_lib_slice<'a>(&'a self) -> &'a [Self::S<'a>];
     }
 
     impl Library for &str {
+        #[cfg_attr(debug_assertions, doc(hidden))]
+        type S<'s> = Self where Self: 's;
+
         #[cfg_attr(debug_assertions, doc(hidden))]
         fn preview_lib(&self) -> &str {
             self
         }
         #[cfg_attr(debug_assertions, doc(hidden))]
-        fn as_lib_slice<'a>(&'a self) -> &'a [impl AsRef<str>] {
+        fn as_lib_slice<'a>(&'a self) -> &'a [Self::S<'a>] {
             std::slice::from_ref(self)
         }
     }
 
-    impl Library for String {
+    impl<'a> Library for String {
+        #[cfg_attr(debug_assertions, doc(hidden))]
+        type S<'s> = Self where Self: 's;
+
         #[cfg_attr(debug_assertions, doc(hidden))]
         fn preview_lib(&self) -> &str {
             self.as_str()
         }
         #[cfg_attr(debug_assertions, doc(hidden))]
-        fn as_lib_slice(&self) -> &[impl AsRef<str>] {
+        fn as_lib_slice(&self) -> &[Self::S<'static>] {
             std::slice::from_ref(self)
         }
     }
 
-    impl Library for [&str] {
+    impl<'a> Library for [&'a str] {
+        #[cfg_attr(debug_assertions, doc(hidden))]
+        type S<'s> = &'a str where Self: 's;
+
         #[cfg_attr(debug_assertions, doc(hidden))]
         fn preview_lib(&self) -> &str {
             self.first().unwrap_or(&"")
         }
         #[cfg_attr(debug_assertions, doc(hidden))]
-        fn as_lib_slice(&self) -> &[impl AsRef<str>] {
+        fn as_lib_slice(&self) -> &[Self::S<'a>] {
             self
         }
     }
 
     impl<const N: usize, S: AsRef<str>> Library for [S; N] {
         #[cfg_attr(debug_assertions, doc(hidden))]
+        type S<'s> = S where Self: 's;
+
+        #[cfg_attr(debug_assertions, doc(hidden))]
         fn preview_lib(&self) -> &str {
             self.first().map(|s| s.as_ref()).unwrap_or("")
         }
         #[cfg_attr(debug_assertions, doc(hidden))]
-        fn as_lib_slice<'a>(&'a self) -> &'a [impl AsRef<str>] {
+        fn as_lib_slice<'a>(&'a self) -> &'a [Self::S<'a>] {
             self
         }
     }
 
-    impl<OL: Library> Library for &OL {
+    impl<'a, OL: Library> Library for &'a OL {
+        #[cfg_attr(debug_assertions, doc(hidden))]
+        type S<'s> = OL::S<'s> where Self: 's;
+
         #[cfg_attr(debug_assertions, doc(hidden))]
         fn preview_lib(&self) -> &str {
             (*self).preview_lib()
         }
         #[cfg_attr(debug_assertions, doc(hidden))]
-        fn as_lib_slice(&self) -> &[impl AsRef<str>] {
+        fn as_lib_slice(&self) -> &[Self::S<'_>] {
             (*self).as_lib_slice()
         }
     }
