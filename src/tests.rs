@@ -287,3 +287,60 @@ fn test_paths_invalidation() {
     // with a vector of strings
     rsconf::rebuild_if_paths_changed(paths);
 }
+
+#[test]
+#[cfg(windows)]
+fn get_macro_value_win_max() {
+    let target = target();
+    let definition = target
+        .get_macro_value("max(x,y)", "windows.h")
+        .expect("Error compiling get_macro_value with parameters!")
+        .expect("max macro should be defined since we didn't define NOMINMAX!");
+    assert_eq!(&definition, "(((x) > (y)) ? (x) : (y))");
+}
+
+#[test]
+#[cfg(windows)]
+/// Make sure the recursive version isn't broken for values that don't use recursion.
+fn get_macro_value_recursive_win_max() {
+    let target = target();
+    let definition = target
+        .get_macro_value_recursive("max(x,y)", "windows.h")
+        .expect("Error compiling get_macro_value with parameters!")
+        .expect("max macro should be defined since we didn't define NOMINMAX!");
+    assert_eq!(&definition, "(((x) > (y)) ? (x) : (y))");
+}
+
+#[test]
+#[cfg(target_env = "gnu")]
+fn get_macro_value_glibc_version() {
+    let target = target();
+    let definition = target
+        .get_macro_value("__GLIBC_MINOR__", "features.h")
+        .expect("Error compiling get_macro_value with parameters!")
+        .expect("__GLIBC_MINOR__ should be defined in features.h under glibc 6.0+");
+    assert!((definition.parse::<i32>()).is_ok());
+}
+
+#[test]
+fn get_macro_value_recursive() {
+    use std::io::Write;
+
+    let temp_dir = crate::TempDir::new().unwrap();
+    let header = temp_dir.with_file_name("sample_recursive_macro.h");
+    std::fs::File::create(&header)
+        .unwrap()
+        .write_all(
+            b"
+    #define INNER(X) BAR
+    #define FOO INNER(?)
+    ",
+        )
+        .unwrap();
+    let target = target();
+    let definition = target
+        .get_macro_value_recursive("FOO", header.to_str().unwrap())
+        .expect("Error compiling test header!")
+        .expect("Failed to get initial macro value");
+    assert_eq!(&definition, "BAR");
+}
