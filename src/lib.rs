@@ -856,7 +856,8 @@ mod sealed {
     /// An abstraction to make it possible to check for or include zero or more headers. Headers are
     /// included in the same order they are provided in.
     ///
-    /// Implemented for all [`Header`] types as well as a literal `None`.
+    /// Implemented for the various `String`/`&str` types as well as arrays of the same (e.g.
+    /// `[String]`/`[&'str']`. Also implemented for the literal bare `None` type/value.
     pub trait Header {
         #[cfg_attr(not(test), doc(hidden))]
         fn to_header_lines(&self) -> String;
@@ -939,7 +940,8 @@ mod sealed {
     /// An abstraction to make it possible to check for or include zero or more libraries. Libraries
     /// are included in the same order they are provided in.
     ///
-    /// Implemented for `String` and `&str` types as well as a literal `None`.
+    /// Implemented for the various `String`/`&str` types as well as arrays of the same (e.g.
+    /// `[String]`/`[&'str']`.
     pub trait Library {
         #[cfg_attr(not(test), doc(hidden))]
         type S<'s>: AsRef<str>
@@ -1008,9 +1010,9 @@ mod sealed {
         }
     }
 
-    impl<'a, OL: Library> Library for &'a OL {
+    impl<'a, L: Library> Library for &'a L {
         #[cfg_attr(not(test), doc(hidden))]
-        type S<'s> = OL::S<'s> where Self: 's;
+        type S<'s> = L::S<'s> where Self: 's;
 
         #[cfg_attr(not(test), doc(hidden))]
         fn preview_lib(&self) -> &str {
