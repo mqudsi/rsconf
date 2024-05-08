@@ -175,6 +175,25 @@ pub fn enable_feature(feature: &str) {
     println!("cargo:rustc-cfg=feature=\"{feature}\"");
 }
 
+/// Informs the compiler of a `cfg` with the name `name`, enabled if `enabled` is set to `true`.
+///
+/// Enables conditional compilation of code behind `#[cfg(name)]` or with `if cfg!(name)`
+/// (without quotes around `name`).
+///
+/// As of rust 1.80, using `#[attr(cfg = "foo")]` when said feature is not enabled results in a
+/// compile-time warning as rust tries to protect against inadvertent use of invalid/unknown
+/// features. Unlike [`enable_cfg()`], this function informs `rustc` about the presence of a feature
+/// called `name` even when it's not enabled, so that `#[attr(not(cfg = "foo"))]` does not cause
+/// cause warnings when the `foo` cfg is not enabled.
+///
+/// See also: [`declare_cfg_values()`].
+pub fn declare_cfg(name: &str, enabled: bool) {
+    println!("cargo:rustc-check-cfg=cfg({name})");
+    if enabled {
+        println!("cargo:rustc-cfg={name}");
+    }
+}
+
 /// Enables conditional compilation of code behind `#[cfg(name)]` or with `if cfg!(name)`
 /// (without quotes around `name`).
 ///
@@ -186,7 +205,30 @@ pub fn enable_feature(feature: &str) {
 /// of your code (i.e. `name` does not appear anywhere in `Cargo.toml`) and does not participate in
 /// dependency resolution.
 pub fn enable_cfg(name: &str) {
-    println!("cargo:rustc-cfg={name}");
+    declare_cfg(name, true);
+}
+
+// TODO: Add a builder method to encompass the functionality of declare_cfg()/set_cfg()/
+// declare_cfg_values()/set_cfg_value(). Something like
+//     add_cfg("name").with_values(["a", "b", "c"])
+// followed by .enable() or .set_value("a")
+
+/// Inform the compiler of all known valid values for cfg `name`.
+///
+/// Call this before calling [`set_cfg_value()`] to avoid compiler warnings about unrecognized cfg
+/// values under rust 1.80+.
+pub fn declare_cfg_values(name: &str, values: &[&str]) {
+    let payload = values
+        .iter()
+        .inspect(|value| {
+            if value.chars().any(|c| c == '"') {
+                panic!("Invalid value {value} for cfg {name}");
+            }
+        })
+        .map(|v| format!("\"{v}\""))
+        .collect::<Vec<_>>()
+        .join(",");
+    println!("cargo:rustc-check-cfg=cfg(foo, values({payload}))");
 }
 
 /// Activates conditional compilation for code behind `#[cfg(name = "value")]` or with `if cfg!(name
@@ -195,6 +237,9 @@ pub fn enable_cfg(name: &str) {
 /// As with [`enable_cfg()`], this is entirely internal to your code: `name` should not appear in
 /// `Cargo.toml` and this configuration does not participate in dependency resolution (which takes
 /// place before your build script is called).
+///
+/// Call [`declare_cfg_values()`] beforehand to inform the compiler of all possible values for this
+/// cfg or else rustc 1.80+ will issue a compile-time warning about unrecognized cfg values.
 pub fn set_cfg_value(name: &str, value: &str) {
     if value.chars().any(|c| c == '"') {
         panic!("Invalid value {value} for cfg {name}");
