@@ -262,7 +262,7 @@ impl Target {
     const NONE: &'static [&'static str] = &[];
     #[inline(always)]
     #[allow(non_snake_case)]
-    pub fn NULL_CB(_: &str, _: &str) {}
+    fn NULL_CB(_: &str, _: &str) {}
 
     /// Create a new rsconf instance using the default [`cc::Build`] toolchain for the current
     /// compilation target.
