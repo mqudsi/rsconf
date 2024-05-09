@@ -3,7 +3,6 @@ mod tempdir;
 mod tests;
 
 use cc::Build;
-pub use sealed::{Header, Library};
 use std::borrow::Cow;
 use std::ffi::{OsStr, OsString};
 use std::io::prelude::*;
@@ -109,9 +108,9 @@ pub fn link_library(library: &str, how: LinkType) {
 }
 
 /// Instruct Cargo to link the target object against `libraries` in the order provided.
-pub fn link_libraries<S: AsRef<str>>(libraries: &[S], how: LinkType) {
+pub fn link_libraries(libraries: &[&str], how: LinkType) {
     for lib in libraries {
-        how.emit_link_line(lib.as_ref())
+        how.emit_link_line(lib)
     }
 }
 
@@ -129,12 +128,9 @@ pub fn rebuild_if_path_changed(path: &str) {
 /// Instruct Cargo to rerun the build script if any of the following paths change.
 ///
 /// See [`rebuild_if_path_changed()`] for more information.
-pub fn rebuild_if_paths_changed<I, S: AsRef<str>>(paths: I)
-where
-    I: IntoIterator<Item = S>,
-{
+pub fn rebuild_if_paths_changed(paths: &[&str]) {
     for path in paths {
-        rebuild_if_path_changed(path.as_ref())
+        rebuild_if_path_changed(path)
     }
 }
 
@@ -144,12 +140,9 @@ pub fn rebuild_if_env_changed(var: &str) {
 }
 
 /// Instruct Cargo to rerun the build script if any of the named environment variables change.
-pub fn rebuild_if_envs_changed<I, S: AsRef<str>>(vars: I)
-where
-    I: IntoIterator<Item = S>,
-{
+pub fn rebuild_if_envs_changed(vars: &[&str]) {
     for var in vars {
-        rebuild_if_env_changed(var.as_ref());
+        rebuild_if_env_changed(var);
     }
 }
 
@@ -333,7 +326,7 @@ impl Target {
         callback: C,
     ) -> Result<PathBuf, BoxedError>
     where
-        C: FnOnce(&str, &str) -> (),
+        C: FnOnce(&str, &str),
     {
         let stub = fs_sanitize(stub);
 
@@ -408,10 +401,6 @@ impl Target {
 
     /// Checks whether a definition for type `name` exists without pulling in any headers.
     ///
-    /// If it is not possible to include `header` without including other headers as well (or to
-    /// include no headers), use [`has_type_in`](Self::has_type_in) to check for a
-    /// definition after including zero or more headers in the order they are provided.
-    ///
     /// This operation does not link the output; only the header file is inspected.
     pub fn has_type(&self, name: &str) -> bool {
         let snippet = format!(snippet!("has_type.c"), "", name);
@@ -429,15 +418,9 @@ impl Target {
     ///
     /// The `headers` are included in the order they are provided for testing. See
     /// [`has_type()`](Self::has_type) for more info.
-    pub fn has_type_in<H: Header>(&self, name: &str, headers: H) -> bool {
-        let stub = format!(
-            "{}_multi",
-            match headers.preview() {
-                "" => "has_type_in",
-                first => first,
-            }
-        );
-        let snippet = format!(snippet!("has_type.c"), headers.to_header_lines(), name);
+    pub fn has_type_in(&self, name: &str, headers: &[&str]) -> bool {
+        let stub = format!("{}_multi", headers.first().unwrap_or(&"has_type_in"));
+        let snippet = format!(snippet!("has_type.c"), to_includes(headers), name);
         self.build(
             &stub,
             BuildMode::ObjectFile,
@@ -473,13 +456,13 @@ impl Target {
     /// must also be linked by passing in an array or slice of libraries to link when searching.
     ///
     /// [`has_symbol()`]: Self::has_symbol()
-    pub fn has_symbol_in<'a, L: Library>(&self, symbol: &str, libraries: L) -> bool {
+    pub fn has_symbol_in(&self, symbol: &str, libraries: &[&str]) -> bool {
         let snippet = format!(snippet!("has_symbol.c"), symbol);
         self.build(
             symbol,
             BuildMode::Executable,
             &snippet,
-            libraries.as_lib_slice(),
+            libraries,
             Self::NULL_CB,
         )
         .is_ok()
@@ -492,14 +475,11 @@ impl Target {
     ///
     /// [`has_symbol()`]: Self::has_symbol()
     /// [`has_symbol_in()`]: Self::has_symbol_in()
-    pub fn has_symbols_in<'b, S1: AsRef<str>, L: Library>(
-        &self,
-        symbols: &[S1],
-        libraries: L,
-    ) -> bool {
+    pub fn has_symbols_in(&self, symbols: &[&str], libraries: &[&str]) -> bool {
         symbols
             .iter()
-            .all(|symbol| self.has_symbol_in(symbol.as_ref(), &libraries))
+            .copied()
+            .all(|symbol| self.has_symbol_in(symbol, libraries))
     }
 
     /// Returns whether or not it was possible to link against `library`.
@@ -535,10 +515,10 @@ impl Target {
     ///
     /// Note that the order of linking may influence the outcome of this test. The libraries will be
     /// linked in the order they are provided in when testing.
-    pub fn has_libraries<S: AsRef<str>>(&self, libraries: &[S]) -> bool {
+    pub fn has_libraries(&self, libraries: &[&str]) -> bool {
         let stub = libraries
-            .get(0)
-            .map(|s| s.as_ref())
+            .first()
+            .map(|l| l.as_ref())
             .unwrap_or("has_libraries");
         let snippet = snippet!("empty.c");
         self.build(
@@ -554,10 +534,10 @@ impl Target {
     /// Returns a reference to the first library name that was passed in that was ultimately found
     /// on the target system, or `None` if none were found. See
     /// [`has_library()`](Self::has_library()) for more information.
-    pub fn find_first_library<'a, S: AsRef<str>>(&self, libraries: &'a [S]) -> Option<&'a str> {
+    pub fn find_first_library<'a>(&self, libraries: &'a [&str]) -> Option<&'a str> {
         for lib in libraries {
-            if self.has_library(lib.as_ref()) {
-                return Some(lib.as_ref());
+            if self.has_library(lib) {
+                return Some(*lib);
             }
         }
         None
@@ -569,17 +549,17 @@ impl Target {
     /// information.
     ///
     /// [`has_symbol()`]: Self::has_symbol()
-    pub fn find_first_library_with<'a, S1: AsRef<str>, S2: AsRef<str>>(
+    pub fn find_first_library_with<'a>(
         &self,
-        libraries: &'a [S1],
-        symbols: &[S2],
+        libraries: &'a [&str],
+        symbols: &[&str],
     ) -> Option<&'a str> {
         for lib in libraries {
-            if !self.has_library(lib.as_ref()) {
+            if !self.has_library(lib) {
                 continue;
             }
-            if self.has_symbols_in(symbols, lib.as_ref()) {
-                return Some(lib.as_ref());
+            if self.has_symbols_in(symbols, &[lib]) {
+                return Some(lib);
             }
         }
         None
@@ -594,7 +574,7 @@ impl Target {
     pub fn has_header(&self, header: &str) -> bool {
         let snippet = format!(snippet!("has_header.c"), to_include(header));
         self.build(
-            header.preview(),
+            header,
             BuildMode::ObjectFile,
             &snippet,
             Self::NONE,
@@ -605,8 +585,8 @@ impl Target {
 
     /// Checks whether the [`cc::Build`] passed to [`Target::new()`] as configured can pull in the
     /// named `headers` in the order they're provided.
-    pub fn has_headers<S: AsRef<str>>(&self, headers: &[S]) -> bool {
-        let stub = headers.get(0).map(|s| s.as_ref()).unwrap_or("has_headers");
+    pub fn has_headers(&self, headers: &[&str]) -> bool {
+        let stub = headers.first().map(|s| s.as_ref()).unwrap_or("has_headers");
         let snippet = format!(snippet!("has_header.c"), to_includes(headers));
         self.build(
             stub,
@@ -635,7 +615,7 @@ impl Target {
     ///
     /// This is internally a call to [`has_libraries()`](Self::has_libraries()) followed by a
     /// conditional call to [`link_libraries()`].
-    pub fn try_link_libraries<S: AsRef<str>>(&self, libraries: &[S], how: LinkType) -> bool {
+    pub fn try_link_libraries(&self, libraries: &[&str], how: LinkType) -> bool {
         if self.has_libraries(libraries) {
             link_libraries(libraries, how);
             return true;
@@ -648,8 +628,8 @@ impl Target {
     /// This is the C equivalent of `#ifdef xxxx` and does not check if there is a value associated
     /// with the definition. (You can use [`r#if()`](Self::if()) to test if a define has a particular
     /// value.)
-    pub fn ifdef<H: Header>(&self, define: &str, headers: H) -> bool {
-        let snippet = format!(snippet!("ifdef.c"), headers.to_header_lines(), define);
+    pub fn ifdef(&self, define: &str, headers: &[&str]) -> bool {
+        let snippet = format!(snippet!("ifdef.c"), to_includes(headers), define);
         self.build(
             define,
             BuildMode::ObjectFile,
@@ -665,8 +645,8 @@ impl Target {
     /// This can be used with `condition` set to `defined(FOO)` to perform the equivalent of
     /// [`ifdef()`](Self::ifdef) or it can be used to check for specific values e.g. with
     /// `condition` set to something like `FOO != 0`.
-    pub fn r#if<H: Header>(&self, condition: &str, headers: H) -> bool {
-        let snippet = format!(snippet!("if.c"), headers.to_header_lines(), condition);
+    pub fn r#if(&self, condition: &str, headers: &[&str]) -> bool {
+        let snippet = format!(snippet!("if.c"), to_includes(headers), condition);
         self.build(
             condition,
             BuildMode::ObjectFile,
@@ -685,8 +665,8 @@ impl Target {
     ///
     /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
     /// require being able to run a binary compiled for the target platform.
-    pub fn get_i32_value<H: Header>(&self, ident: &str, header: H) -> Result<i32, BoxedError> {
-        let snippet = format!(snippet!("get_i32_value.c"), header.to_header_lines(), ident);
+    pub fn get_i32_value(&self, ident: &str, headers: &[&str]) -> Result<i32, BoxedError> {
+        let snippet = format!(snippet!("get_i32_value.c"), to_includes(headers), ident);
         let exe = self.build(
             ident,
             BuildMode::Executable,
@@ -712,8 +692,8 @@ impl Target {
     ///
     /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
     /// require being able to run a binary compiled for the target platform.
-    pub fn get_u32_value<H: Header>(&self, ident: &str, header: H) -> Result<u32, BoxedError> {
-        let snippet = format!(snippet!("get_u32_value.c"), header.to_header_lines(), ident);
+    pub fn get_u32_value(&self, ident: &str, headers: &[&str]) -> Result<u32, BoxedError> {
+        let snippet = format!(snippet!("get_u32_value.c"), to_includes(headers), ident);
         let exe = self.build(
             ident,
             BuildMode::Executable,
@@ -739,8 +719,8 @@ impl Target {
     ///
     /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
     /// require being able to run a binary compiled for the target platform.
-    pub fn get_i64_value<H: Header>(&self, ident: &str, header: H) -> Result<i64, BoxedError> {
-        let snippet = format!(snippet!("get_i64_value.c"), header.to_header_lines(), ident);
+    pub fn get_i64_value(&self, ident: &str, headers: &[&str]) -> Result<i64, BoxedError> {
+        let snippet = format!(snippet!("get_i64_value.c"), to_includes(headers), ident);
         let exe = self.build(
             ident,
             BuildMode::Executable,
@@ -766,8 +746,8 @@ impl Target {
     ///
     /// The `get_xxx_value()` methods do not currently support cross-compilation scenarios as they
     /// require being able to run a binary compiled for the target platform.
-    pub fn get_u64_value<H: Header>(&self, ident: &str, header: H) -> Result<u64, BoxedError> {
-        let snippet = format!(snippet!("get_u64_value.c"), header.to_header_lines(), ident);
+    pub fn get_u64_value(&self, ident: &str, headers: &[&str]) -> Result<u64, BoxedError> {
+        let snippet = format!(snippet!("get_u64_value.c"), to_includes(headers), ident);
         let exe = self.build(
             ident,
             BuildMode::Executable,
@@ -789,10 +769,10 @@ impl Target {
     ///
     /// For "function macros" like `max(x, y)`, make sure to pass in placeholders for the parameters
     /// (they will be returned as-is in the expanded output).
-    pub fn get_macro_value<H: Header>(
+    pub fn get_macro_value(
         &self,
         ident: &str,
-        header: H,
+        headers: &[&str],
     ) -> Result<Option<String>, BoxedError> {
         // We use `ident` twice: to check if it's defined then to get its value
         // For "function macros", the first should be without parentheses!
@@ -803,7 +783,7 @@ impl Target {
         };
         let snippet = format!(
             snippet!("get_macro_value.c"),
-            header.to_header_lines(),
+            to_includes(headers),
             bare_name,
             ident
         );
@@ -837,16 +817,16 @@ impl Target {
     ///
     /// For "function macros" like `max(x, y)`, make sure to pass in placeholders for the parameters
     /// (they will be returned as-is in the expanded output).
-    pub fn get_macro_value_recursive<H: Header>(
+    pub fn get_macro_value_recursive(
         &self,
         ident: &str,
-        header: H,
+        headers: &[&str],
     ) -> Result<Option<String>, BoxedError> {
-        let mut result = self.get_macro_value(ident, &header)?;
+        let mut result = self.get_macro_value(ident, headers)?;
         while result.is_some() {
             // We shouldn't bubble up recursive errors because a macro can expand to a value that
             // isn't a valid macro name (such as an expression wrapped in parentheses).
-            match self.get_macro_value(result.as_ref().unwrap().as_str(), &header) {
+            match self.get_macro_value(result.as_ref().unwrap(), headers) {
                 Ok(Some(r)) => result = Some(r),
                 _ => break,
             };
@@ -883,189 +863,9 @@ fn to_include(header: &str) -> String {
     format!("#include <{}>", header)
 }
 
-fn to_includes<S: AsRef<str>>(headers: &[S]) -> String {
+/// Convert one or more header filenames `headers` to `#include <..>` statements.
+fn to_includes(headers: &[&str]) -> String {
     let mut vec = Vec::with_capacity(headers.len());
-    // TODO: Use collect_into() once it's stabilized instead of looping.
-    for line in headers.iter().map(|s| s.as_ref()).map(to_include) {
-        vec.push(line);
-    }
+    vec.extend(headers.iter().map(|s| s.as_ref()).map(to_include));
     vec.join("\n")
-}
-
-mod sealed {
-    use crate::{to_include, to_includes};
-
-    #[cfg_attr(not(test), doc(hidden))]
-    pub enum Never {}
-
-    /// An abstraction to make it possible to check for or include zero or more headers. Headers are
-    /// included in the same order they are provided in.
-    ///
-    /// Implemented for the various `String`/`&str` types as well as arrays of the same (e.g.
-    /// `[String]`/`[&'str']`. Also implemented for the literal bare `None` type/value.
-    pub trait Header {
-        #[cfg_attr(not(test), doc(hidden))]
-        fn to_header_lines(&self) -> String;
-        #[cfg_attr(not(test), doc(hidden))]
-        fn preview(&self) -> &str;
-    }
-
-    impl Header for &str {
-        #[cfg_attr(not(test), doc(hidden))]
-        fn to_header_lines(&self) -> String {
-            to_include(self)
-        }
-
-        #[cfg_attr(not(test), doc(hidden))]
-        fn preview(&self) -> &str {
-            self
-        }
-    }
-
-    impl Header for String {
-        #[cfg_attr(not(test), doc(hidden))]
-        fn to_header_lines(&self) -> String {
-            self.as_str().to_header_lines()
-        }
-
-        #[cfg_attr(not(test), doc(hidden))]
-        fn preview(&self) -> &str {
-            self.as_str()
-        }
-    }
-
-    impl Header for &[&str] {
-        #[cfg_attr(not(test), doc(hidden))]
-        fn to_header_lines(&self) -> String {
-            to_includes(self)
-        }
-
-        #[cfg_attr(not(test), doc(hidden))]
-        fn preview(&self) -> &str {
-            self.first().copied().unwrap_or("")
-        }
-    }
-
-    impl Header for Option<Never> {
-        #[cfg_attr(not(test), doc(hidden))]
-        fn to_header_lines(&self) -> String {
-            "".to_owned()
-        }
-
-        #[cfg_attr(not(test), doc(hidden))]
-        fn preview(&self) -> &str {
-            ""
-        }
-    }
-
-    impl<const N: usize, S: AsRef<str>> Header for [S; N] {
-        #[cfg_attr(not(test), doc(hidden))]
-        fn to_header_lines(&self) -> String {
-            to_includes(self)
-        }
-
-        #[cfg_attr(not(test), doc(hidden))]
-        fn preview(&self) -> &str {
-            self.first().map(|s| s.as_ref()).unwrap_or("")
-        }
-    }
-
-    impl<H: Header> Header for &H {
-        #[cfg_attr(not(test), doc(hidden))]
-        fn to_header_lines(&self) -> String {
-            (*self).to_header_lines()
-        }
-
-        #[cfg_attr(not(test), doc(hidden))]
-        fn preview(&self) -> &str {
-            (*self).preview()
-        }
-    }
-
-    /// An abstraction to make it possible to check for or include zero or more libraries. Libraries
-    /// are included in the same order they are provided in.
-    ///
-    /// Implemented for the various `String`/`&str` types as well as arrays of the same (e.g.
-    /// `[String]`/`[&'str']`.
-    pub trait Library {
-        #[cfg_attr(not(test), doc(hidden))]
-        type S<'s>: AsRef<str>
-        where
-            Self: 's;
-
-        #[cfg_attr(not(test), doc(hidden))]
-        fn preview_lib(&self) -> &str;
-        #[cfg_attr(not(test), doc(hidden))]
-        fn as_lib_slice<'a>(&'a self) -> &'a [Self::S<'a>];
-    }
-
-    impl Library for &str {
-        #[cfg_attr(not(test), doc(hidden))]
-        type S<'s> = Self where Self: 's;
-
-        #[cfg_attr(not(test), doc(hidden))]
-        fn preview_lib(&self) -> &str {
-            self
-        }
-        #[cfg_attr(not(test), doc(hidden))]
-        fn as_lib_slice<'a>(&'a self) -> &'a [Self::S<'a>] {
-            std::slice::from_ref(self)
-        }
-    }
-
-    impl<'a> Library for String {
-        #[cfg_attr(not(test), doc(hidden))]
-        type S<'s> = Self where Self: 's;
-
-        #[cfg_attr(not(test), doc(hidden))]
-        fn preview_lib(&self) -> &str {
-            self.as_str()
-        }
-        #[cfg_attr(not(test), doc(hidden))]
-        fn as_lib_slice(&self) -> &[Self::S<'static>] {
-            std::slice::from_ref(self)
-        }
-    }
-
-    impl<'a> Library for [&'a str] {
-        #[cfg_attr(not(test), doc(hidden))]
-        type S<'s> = &'a str where Self: 's;
-
-        #[cfg_attr(not(test), doc(hidden))]
-        fn preview_lib(&self) -> &str {
-            self.first().unwrap_or(&"")
-        }
-        #[cfg_attr(not(test), doc(hidden))]
-        fn as_lib_slice(&self) -> &[Self::S<'a>] {
-            self
-        }
-    }
-
-    impl<const N: usize, S: AsRef<str>> Library for [S; N] {
-        #[cfg_attr(not(test), doc(hidden))]
-        type S<'s> = S where Self: 's;
-
-        #[cfg_attr(not(test), doc(hidden))]
-        fn preview_lib(&self) -> &str {
-            self.first().map(|s| s.as_ref()).unwrap_or("")
-        }
-        #[cfg_attr(not(test), doc(hidden))]
-        fn as_lib_slice<'a>(&'a self) -> &'a [Self::S<'a>] {
-            self
-        }
-    }
-
-    impl<'a, L: Library> Library for &'a L {
-        #[cfg_attr(not(test), doc(hidden))]
-        type S<'s> = L::S<'s> where Self: 's;
-
-        #[cfg_attr(not(test), doc(hidden))]
-        fn preview_lib(&self) -> &str {
-            (*self).preview_lib()
-        }
-        #[cfg_attr(not(test), doc(hidden))]
-        fn as_lib_slice(&self) -> &[Self::S<'_>] {
-            (*self).as_lib_slice()
-        }
-    }
 }

@@ -31,69 +31,54 @@ pub fn target() -> &'static Target {
 #[test]
 fn struct_defined() {
     let target = target();
-    assert_eq!(target.has_type_in("struct FILE", "stdio.h"), true);
-    assert_eq!(target.has_type_in("struct FILE", ["stdio.h"]), true);
     assert_eq!(target.has_type_in("struct FILE", &["stdio.h"]), true);
-    assert_eq!(
-        target.has_type_in("struct FILE", &["stdio.h".to_owned()]),
-        true
-    );
-    assert_eq!(
-        target.has_type_in("struct FILE", &&["stdio.h".to_owned()]),
-        true
-    );
-    assert_eq!(
-        target.has_type_in("struct FILE", "stdio.h".to_owned()),
-        true
-    );
 }
 
 #[test]
 fn long_long_defined() {
     let target = target();
     assert_eq!(target.has_type("long long"), true);
+    assert_eq!(target.has_type_in("long long", &[]), true);
 }
 
 #[test]
 #[cfg(unix)]
 fn dir_defined_no_struct() {
     let target = target();
-    assert_eq!(target.has_type_in("DIR", "dirent.h"), true);
+    assert_eq!(target.has_type_in("DIR", &["dirent.h"]), true);
 }
 
 #[test]
 #[cfg(unix)]
 fn dir_defined() {
     let target = target();
-    assert_eq!(target.has_type_in("struct DIR", "dirent.h"), true);
+    assert_eq!(target.has_type_in("struct DIR", &["dirent.h"]), true);
 }
 
 #[test]
 fn struct_not_defined() {
     let target = target();
-    assert_eq!(target.has_type_in("DIR", "stdio.h"), false);
+    assert_eq!(target.has_type_in("DIR", &["stdio.h"]), false);
 }
 
 #[test]
 fn valid_i32_value() {
     let target = target();
-    let result = target.get_i32_value("INT_MIN", "limits.h");
+    let result = target.get_i32_value("INT_MIN", &["limits.h"]);
     assert_eq!(result.unwrap(), i32::MIN);
 }
 
 #[test]
-fn invalid_i32_value_borrowed_str() {
+fn invalid_i32_value() {
     let target = target();
-    let header = "limits.h".to_owned();
-    let result = target.get_i32_value("LLONG_MAX", header.as_str());
+    let result = target.get_i32_value("LLONG_MAX", &["limits.h"]);
     assert!(matches!(result, Err(_)));
 }
 
 #[test]
-fn valid_u32_value_string_ref() {
+fn valid_u32_value() {
     let target = target();
-    let header = "limits.h".to_string();
-    let result = target.get_u32_value("INT_MAX", &header);
+    let result = target.get_u32_value("INT_MAX", &["limits.h"]);
     assert_eq!(result.unwrap(), 2147483647);
 }
 
@@ -101,7 +86,7 @@ fn valid_u32_value_string_ref() {
 #[cfg(unix)]
 fn dirent_value() {
     let target = target();
-    let result = target.get_u32_value("DT_FIFO", "dirent.h");
+    let result = target.get_u32_value("DT_FIFO", &["dirent.h"]);
     assert_eq!(result.unwrap(), 1);
 }
 
@@ -109,14 +94,14 @@ fn dirent_value() {
 #[cfg(windows)]
 fn generic_read_value() {
     let target = target();
-    let result = target.get_u32_value("GENERIC_READ", ["windows.h", "fileapi.h"]);
+    let result = target.get_u32_value("GENERIC_READ", &["windows.h", "fileapi.h"]);
     assert_eq!(result.unwrap(), 0x80000000);
 }
 
 #[test]
 fn valid_u64_value() {
     let target = target();
-    let result = target.get_u64_value("LLONG_MAX", "limits.h");
+    let result = target.get_u64_value("LLONG_MAX", &["limits.h"]);
     assert_eq!(result.unwrap(), 9223372036854775807);
 }
 
@@ -128,10 +113,9 @@ fn has_headers() {
 }
 
 #[test]
-fn not_has_header_string_ref() {
+fn not_has_header() {
     let target = target();
-    let header = "f_oobar77.h".to_owned();
-    let result = target.has_header(&header);
+    let result = target.has_header("f_oobar77.h");
     assert_eq!(result, false);
 }
 
@@ -139,7 +123,7 @@ fn not_has_header_string_ref() {
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
 fn if_none() {
     let target = target();
-    let result = target.r#if("__GLIBC_PREREQ(1, 1)", None);
+    let result = target.r#if("__GLIBC_PREREQ(1, 1)", &[]);
     assert_eq!(result, true);
 }
 
@@ -148,9 +132,9 @@ fn custom_define() {
     let mut build = CC.clone();
     build.define("FOO", "42");
     let target = Target::from(build);
-    let result = target.r#if("FOO == 42", None);
+    let result = target.r#if("FOO == 42", &[]);
     assert!(result);
-    let result = target.r#if("FOO != 42", None);
+    let result = target.r#if("FOO != 42", &[]);
     assert!(result == false);
 }
 
@@ -158,21 +142,21 @@ fn custom_define() {
 #[cfg(all(unix, target_env = "gnu"))]
 fn if_false() {
     let target = target();
-    let result = target.r#if("!__GLIBC_PREREQ(10, 3)", "stdio.h");
+    let result = target.r#if("!__GLIBC_PREREQ(10, 3)", &["stdio.h"]);
     assert_eq!(result, true);
 }
 
 #[test]
 fn not_if() {
     let target = target();
-    let result = target.r#if("__FOOO_BAR_12_", None);
+    let result = target.r#if("__FOOO_BAR_12_", &[]);
     assert_eq!(result, false);
 }
 
 #[test]
 fn if_true() {
     let target = target();
-    let result = target.r#if("1", None);
+    let result = target.r#if("1", &[]);
     assert_eq!(result, true);
 }
 
@@ -217,7 +201,7 @@ fn has_symbol_in_libc() {
 #[cfg(unix)]
 fn has_symbol_pthread_create() {
     let target = target();
-    let result = target.has_symbol_in("pthread_create", "pthread");
+    let result = target.has_symbol_in("pthread_create", &["pthread"]);
     assert_eq!(result, true);
 }
 
@@ -225,7 +209,7 @@ fn has_symbol_pthread_create() {
 #[cfg(windows)]
 fn has_symbol_createfilew() {
     let target = target();
-    let result = target.has_symbol_in("CreateFileW", "kernel32.lib");
+    let result = target.has_symbol_in("CreateFileW", &["kernel32.lib"]);
     assert_eq!(result, true);
 }
 
@@ -233,7 +217,7 @@ fn has_symbol_createfilew() {
 #[cfg(unix)]
 fn valid_library_invalid_symbol() {
     let target = target();
-    let result = target.has_symbol_in("exhilarate", "pthread");
+    let result = target.has_symbol_in("exhilarate", &["pthread"]);
     assert_eq!(result, false);
 }
 
@@ -241,14 +225,14 @@ fn valid_library_invalid_symbol() {
 #[cfg(windows)]
 fn valid_library_invalid_symbol() {
     let target = target();
-    let result = target.has_symbol_in("createfilew", "kernel32.lib");
+    let result = target.has_symbol_in("createfilew", &["kernel32.lib"]);
     assert_eq!(result, false);
 }
 
 #[test]
 fn invalid_library_no_symbol() {
     let target = target();
-    let result = target.has_symbol_in("zoonotico", "exhilarate");
+    let result = target.has_symbol_in("zoonotico", &["exhilarate"]);
     assert_eq!(result, false);
 }
 
@@ -275,17 +259,11 @@ fn warn_macro() {
 
 #[test]
 fn test_paths_invalidation() {
-    // Try with an array directly
-    rsconf::rebuild_if_paths_changed(["foo", "bar"]);
     // with an array ref
     rsconf::rebuild_if_paths_changed(&["foo", "bar"]);
-    // with an array of strings
-    rsconf::rebuild_if_paths_changed(&["foo".to_owned(), "bar".to_owned()]);
     // with a ref to a vector of strings
-    let paths = vec!["foo".to_owned(), "bar".to_owned()];
+    let paths = vec!["foo", "bar"];
     rsconf::rebuild_if_paths_changed(&paths);
-    // with a vector of strings
-    rsconf::rebuild_if_paths_changed(paths);
 }
 
 #[test]
@@ -293,7 +271,7 @@ fn test_paths_invalidation() {
 fn get_macro_value_win_max() {
     let target = target();
     let definition = target
-        .get_macro_value("max(x,y)", "windows.h")
+        .get_macro_value("max(x,y)", &["windows.h"])
         .expect("Error compiling get_macro_value with parameters!")
         .expect("max macro should be defined since we didn't define NOMINMAX!");
     assert_eq!(&definition, "(((x) > (y)) ? (x) : (y))");
@@ -305,7 +283,7 @@ fn get_macro_value_win_max() {
 fn get_macro_value_recursive_win_max() {
     let target = target();
     let definition = target
-        .get_macro_value_recursive("max(x,y)", "windows.h")
+        .get_macro_value_recursive("max(x,y)", &["windows.h"])
         .expect("Error compiling get_macro_value with parameters!")
         .expect("max macro should be defined since we didn't define NOMINMAX!");
     assert_eq!(&definition, "(((x) > (y)) ? (x) : (y))");
@@ -316,7 +294,7 @@ fn get_macro_value_recursive_win_max() {
 fn get_macro_value_glibc_version() {
     let target = target();
     let definition = target
-        .get_macro_value("__GLIBC_MINOR__", "features.h")
+        .get_macro_value("__GLIBC_MINOR__", &["features.h"])
         .expect("Error compiling get_macro_value with parameters!")
         .expect("__GLIBC_MINOR__ should be defined in features.h under glibc 6.0+");
     assert!((definition.parse::<i32>()).is_ok());
@@ -339,7 +317,7 @@ fn get_macro_value_recursive() {
         .unwrap();
     let target = target();
     let definition = target
-        .get_macro_value_recursive("FOO", header.to_str().unwrap())
+        .get_macro_value_recursive("FOO", &[header.to_str().unwrap()])
         .expect("Error compiling test header!")
         .expect("Failed to get initial macro value");
     assert_eq!(&definition, "BAR");
