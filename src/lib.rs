@@ -30,6 +30,9 @@ macro_rules! snippet {
     };
 }
 
+/// An error encountered during the compliation stage.
+///
+/// This is currently not public because we only return it as [`BoxedError`].
 #[derive(Debug)]
 struct CompilationError {
     output: Output,
@@ -114,9 +117,10 @@ pub fn link_libraries(libraries: &[&str], how: LinkType) {
     }
 }
 
-/// Instruct Cargo to rerun the build script if the following path changes (based off the last
-/// modification time). If the path is to a directory, the build script is re-run if any files under
-/// that directory are modified.
+/// Instruct Cargo to rerun the build script if the provided path changes.
+///
+/// Change detection is based off the modification time (mtime). If the path is to a directory, the
+/// build script is re-run if any files under that directory are modified.
 ///
 /// By default, Cargo reruns the build script if any file in the source tree is modified. To make it
 /// ignore changes, specify a file. To make it ignore all changes, call this with `"build.rs"` as
@@ -125,7 +129,7 @@ pub fn rebuild_if_path_changed(path: &str) {
     println!("cargo:rerun-if-changed={path}");
 }
 
-/// Instruct Cargo to rerun the build script if any of the following paths change.
+/// Instruct Cargo to rerun the build script if any of the provided paths change.
 ///
 /// See [`rebuild_if_path_changed()`] for more information.
 pub fn rebuild_if_paths_changed(paths: &[&str]) {
@@ -157,15 +161,19 @@ macro_rules! warn {
     }};
 }
 
-/// Enables a feature flag that compiles code annotated with `#[cfg(feature = "feature")]`.
+/// Enables a feature flag that compiles code annotated with `#[cfg(feature = "name")]`.
 ///
 /// The feature does not have to be named in `Cargo.toml` to be used here or in your code, but any
 /// features dynamically enabled via this script will not participate in dependency resolution.
-pub fn enable_feature(feature: &str) {
-    if feature.chars().any(|c| c == '"') {
-        panic!("Invalid feature name: {feature}");
+///
+/// As of rust 1.80, features enabled in `build.rs` but not declared in `Cargo.toml` might trigger
+/// build-time warnings; consider using `enable_cfg()` instead if you are averse to declaring this
+/// feature publicly in `Cargo.toml`.
+pub fn enable_feature(name: &str) {
+    if name.chars().any(|c| c == '"') {
+        panic!("Invalid feature name: {name}");
     }
-    println!("cargo:rustc-cfg=feature=\"{feature}\"");
+    println!("cargo:rustc-cfg=feature=\"{name}\"");
 }
 
 /// Informs the compiler of a `cfg` with the name `name`, enabled if `enabled` is set to `true`.
@@ -240,8 +248,8 @@ pub fn set_cfg_value(name: &str, value: &str) {
     println!("cargo:rustc-cfg={name}={value}\"");
 }
 
-/// Makes available an environment variable available to your code at build time, letting you use
-/// the value as a compile-time constant with `env!(NAME)`.
+/// Makes an environment variable available to your code at build time, letting you use the value as
+/// a compile-time constant with `env!(NAME)`.
 pub fn set_env_value(name: &str, value: &str) {
     if value.chars().any(|c| c == '"') {
         panic!("Invalid value {value} for env var {name}");
@@ -449,11 +457,11 @@ impl Target {
             .is_ok()
     }
 
-    /// Like [`has_symbol()`] but links against a library or any number of `libraries` in the order
-    /// they are provided when testing.
+    /// Like [`has_symbol()`] but links against a library or any number of `libraries`.
     ///
-    /// This can be used when `symbol` is in a library that has its own transitive dependencies that
-    /// must also be linked by passing in an array or slice of libraries to link when searching.
+    /// You might need to supply multiple libraries if `symbol` is in a library that has its own
+    /// transitive dependencies that must also be linked for compilation to succeed. Note that
+    /// libraries are linked in the order they are provided.
     ///
     /// [`has_symbol()`]: Self::has_symbol()
     pub fn has_symbol_in(&self, symbol: &str, libraries: &[&str]) -> bool {
@@ -468,10 +476,10 @@ impl Target {
         .is_ok()
     }
 
-    /// Checks for the presence of all the named symbols, linking against one or more libraries
-    /// in the order they were provided when testing.
+    /// Checks for the presence of all the named symbols in the libraries provided.
     ///
-    /// See [`has_symbol()`] and [`has_symbol_in()`] for more information.
+    /// Libraries are linked in the order provided. See [`has_symbol()`] and [`has_symbol_in()`] for
+    /// more information.
     ///
     /// [`has_symbol()`]: Self::has_symbol()
     /// [`has_symbol_in()`]: Self::has_symbol_in()
@@ -482,7 +490,7 @@ impl Target {
             .all(|symbol| self.has_symbol_in(symbol, libraries))
     }
 
-    /// Returns whether or not it was possible to link against `library`.
+    /// Tests whether or not it was possible to link against `library`.
     ///
     /// If it is not possible to link against `library` without also linking against its transitive
     /// dependencies, use [`has_libraries()`](Self::has_libraries) to link against multiple
@@ -510,11 +518,12 @@ impl Target {
         .is_ok()
     }
 
-    /// Returns whether or not it was possible to link against all of `libraries`. See
-    /// [`has_library()`](Self::has_library()) for more information.
+    /// Tests whether or not it was possible to link against all of `libraries`.
     ///
-    /// Note that the order of linking may influence the outcome of this test. The libraries will be
-    /// linked in the order they are provided in when testing.
+    /// See [`has_library()`](Self::has_library()) for more information.
+    ///
+    /// The libraries will be linked in the order they are provided in when testing, which may
+    /// influence the outcome.
     pub fn has_libraries(&self, libraries: &[&str]) -> bool {
         let stub = libraries
             .first()
@@ -531,8 +540,10 @@ impl Target {
         .is_ok()
     }
 
+    /// Returns the first library from those provided that can be successfully linked.
+    ///
     /// Returns a reference to the first library name that was passed in that was ultimately found
-    /// on the target system, or `None` if none were found. See
+    /// and linked successfully on the target system or `None` otherwise. See
     /// [`has_library()`](Self::has_library()) for more information.
     pub fn find_first_library<'a>(&self, libraries: &'a [&str]) -> Option<&'a str> {
         for lib in libraries {
@@ -543,6 +554,9 @@ impl Target {
         None
     }
 
+    /// Returns the first library from those provided that can be successfully linked and contains
+    /// all named `symbols`.
+    ///
     /// Returns a reference to the first library name that was passed in that was ultimately found
     /// on the target system and contains all the symbol names provided, or `None` if no such
     /// library was found. See [`has_library()`](Self::has_library()) and [`has_symbol()`] for more
@@ -640,7 +654,7 @@ impl Target {
         .is_ok()
     }
 
-    /// Evaluates whether or not `condition` evaluates to true at preprocessor time.
+    /// Evaluates whether or not `condition` evaluates to true at the C preprocessor time.
     ///
     /// This can be used with `condition` set to `defined(FOO)` to perform the equivalent of
     /// [`ifdef()`](Self::ifdef) or it can be used to check for specific values e.g. with
@@ -657,9 +671,10 @@ impl Target {
         .is_ok()
     }
 
-    /// Attempts to retrieve the definition of `ident` as an `i32` value. Returns `Ok` in case
-    /// `ident` was defined, has a concrete value, is a compile-time constant (i.e. does not need to
-    /// be linked to retrieve the value), and is a valid `i32` value.
+    /// Attempts to retrieve the definition of `ident` as an `i32` value.
+    ///
+    /// Returns `Ok` in case `ident` was defined, has a concrete value, is a compile-time constant
+    /// (i.e. does not need to be linked to retrieve the value), and is a valid `i32` value.
     ///
     /// # Cross-compliation note:
     ///
@@ -684,9 +699,10 @@ impl Target {
         Ok(std::str::from_utf8(&output.stdout)?.parse()?)
     }
 
-    /// Attempts to retrieve the definition of `ident` as a `u32` value. Returns `Ok` in case
-    /// `ident` was defined, has a concrete value, is a compile-time constant (i.e. does not need to
-    /// be linked to retrieve the value), and is a valid `u32` value.
+    /// Attempts to retrieve the definition of `ident` as a `u32` value.
+    ///
+    /// Returns `Ok` in case `ident` was defined, has a concrete value, is a compile-time constant
+    /// (i.e. does not need to be linked to retrieve the value), and is a valid `u32` value.
     ///
     /// # Cross-compliation note:
     ///
@@ -711,9 +727,10 @@ impl Target {
         Ok(std::str::from_utf8(&output.stdout)?.parse()?)
     }
 
-    /// Attempts to retrieve the definition of `ident` as an `i64` value. Returns `Ok` in case
-    /// `ident` was defined, has a concrete value, is a compile-time constant (i.e. does not need to
-    /// be linked to retrieve the value), and is a valid `i64` value.
+    /// Attempts to retrieve the definition of `ident` as an `i64` value.
+    ///
+    /// Returns `Ok` in case `ident` was defined, has a concrete value, is a compile-time constant
+    /// (i.e. does not need to be linked to retrieve the value), and is a valid `i64` value.
     ///
     /// # Cross-compliation note:
     ///
@@ -738,9 +755,10 @@ impl Target {
         Ok(std::str::from_utf8(&output.stdout)?.parse()?)
     }
 
-    /// Attempts to retrieve the definition of `ident` as a `u64` value. Returns `Ok` in case
-    /// `ident` was defined, has a concrete value, is a compile-time constant (i.e. does not need to
-    /// be linked to retrieve the value), and is a valid `u64` value.
+    /// Attempts to retrieve the definition of `ident` as a `u64` value.
+    ///
+    /// Returns `Ok` in case `ident` was defined, has a concrete value, is a compile-time constant
+    /// (i.e. does not need to be linked to retrieve the value), and is a valid `u64` value.
     ///
     /// # Cross-compliation note:
     ///
@@ -767,8 +785,9 @@ impl Target {
 
     /// Retrieve the definition of a C preprocessor macro or define.
     ///
-    /// For "function macros" like `max(x, y)`, make sure to pass in placeholders for the parameters
-    /// (they will be returned as-is in the expanded output).
+    /// For "function macros" like `max(x, y)`, make sure to supply parentheses and pass in
+    /// placeholders for the parameters (like the `x` and `y` in the example); they will be returned
+    /// as-is in the expanded output.
     pub fn get_macro_value(
         &self,
         ident: &str,
