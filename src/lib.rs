@@ -539,10 +539,7 @@ impl Target {
     /// The libraries will be linked in the order they are provided in when testing, which may
     /// influence the outcome.
     pub fn has_libraries(&self, libraries: &[&str]) -> bool {
-        let stub = libraries
-            .first()
-            .map(|l| l.as_ref())
-            .unwrap_or("has_libraries");
+        let stub = libraries.first().copied().unwrap_or("has_libraries");
         let snippet = snippet!("empty.c");
         self.build(
             stub,
@@ -614,7 +611,7 @@ impl Target {
     /// Checks whether the [`cc::Build`] passed to [`Target::new()`] as configured can pull in the
     /// named `headers` in the order they're provided.
     pub fn has_headers(&self, headers: &[&str]) -> bool {
-        let stub = headers.first().map(|s| s.as_ref()).unwrap_or("has_headers");
+        let stub = headers.first().copied().unwrap_or("has_headers");
         let snippet = format!(snippet!("has_header.c"), to_includes(headers));
         self.build(
             stub,
@@ -899,6 +896,6 @@ fn to_include(header: &str) -> String {
 /// Convert one or more header filenames `headers` to `#include <..>` statements.
 fn to_includes(headers: &[&str]) -> String {
     let mut vec = Vec::with_capacity(headers.len());
-    vec.extend(headers.iter().map(|s| s.as_ref()).map(to_include));
+    vec.extend(headers.iter().copied().map(to_include));
     vec.join("\n")
 }
