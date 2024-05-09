@@ -31,7 +31,7 @@ macro_rules! snippet {
 }
 
 #[derive(Debug)]
-pub struct CompilationError {
+struct CompilationError {
     output: Output,
 }
 
