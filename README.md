@@ -80,6 +80,8 @@ fn setup_term() -> bool {
 }
 ```
 
+Note that there are actually [convenience methods](https://docs.rs/rsconf/latest/rsconf/) that significantly reduce the boilerplate above, but the more verbose api has been used for illustration purposes.
+
 ## License
 
-`rsconf` is released under a dual MIT and Apache 2.0 license. All rights are otherwise reserved, copyright Mahmoud Al-Qudsi 2023.
+`rsconf` is released under a dual MIT and Apache 2.0 license. All rights are otherwise reserved, copyright Mahmoud Al-Qudsi 2024.
