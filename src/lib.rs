@@ -1,3 +1,17 @@
+//! The `rsconf` crate contains `build.rs` helper utilities and funcitionality to assist with
+//! managing complicated build scripts, interacting with the native/system headers and libraries,
+//! exposing rust constants based off of system headers, and conditionally compiling rust code based
+//! off the presence or absence of certain functionality in the system headers and libraries.
+//!
+//! This crate can be used standalone or in conjunction with the [`cc`
+//! crate](https://docs.rs/cc/latest/cc/) when introspecting the build system's environment.
+//!
+//! In addition to facilitating easier ffi and other native system interop, `rsconf` also exposes a
+//! strongly typed API for interacting with `cargo` at build-time and influencing its behavior,
+//! including more user-friendly alternatives to the low-level `println!("cargo:xxx")` "api" used to
+//! enable features, enable `#[cfg(...)]` conditional compilation blocks or define `cfg` values, and
+//! more.
+
 mod tempdir;
 #[cfg(test)]
 mod tests;
