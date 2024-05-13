@@ -243,7 +243,7 @@ pub fn declare_cfg_values(name: &str, values: &[&str]) {
         .map(|v| format!("\"{v}\""))
         .collect::<Vec<_>>()
         .join(",");
-    println!("cargo:rustc-check-cfg=cfg(foo, values({payload}))");
+    println!("cargo:rustc-check-cfg=cfg({name}, values({payload}))");
 }
 
 /// Activates conditional compilation for code behind `#[cfg(name = "value")]` or with `if cfg!(name
