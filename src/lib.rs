@@ -216,7 +216,10 @@ pub fn declare_cfg(name: &str, enabled: bool) {
     if name.chars().any(|c| !c.is_ascii_alphanumeric()) {
         panic!("Invalid cfg name {name}");
     }
-    println!("cargo:rustc-check-cfg=cfg({name})");
+    // Use #[cfg(version = "1.80.0")] when RFC 2523 finally lands
+    if rustc_version().map(|v| !v.cmp(&(1, 80, 0)).is_lt()).unwrap_or(true) {
+        println!("cargo:rustc-check-cfg=cfg({name})");
+    }
     if enabled {
         println!("cargo:rustc-cfg={name}");
     }
@@ -251,17 +254,20 @@ pub fn declare_cfg_values(name: &str, values: &[&str]) {
     if name.chars().any(|c| !c.is_ascii_alphanumeric()) {
         panic!("Invalid cfg name {name}");
     }
-    let payload = values
-        .iter()
-        .inspect(|value| {
-            if value.chars().any(|c| c == '"') {
-                panic!("Invalid value {value} for cfg {name}");
-            }
-        })
-        .map(|v| format!("\"{v}\""))
-        .collect::<Vec<_>>()
-        .join(",");
-    println!("cargo:rustc-check-cfg=cfg({name}, values({payload}))");
+    // Use #[cfg(version = "1.80.0")] when RFC 2523 finally lands
+    if rustc_version().map(|v| !v.cmp(&(1, 80, 0)).is_lt()).unwrap_or(true) {
+        let payload = values
+            .iter()
+            .inspect(|value| {
+                if value.chars().any(|c| c == '"') {
+                    panic!("Invalid value {value} for cfg {name}");
+                }
+            })
+            .map(|v| format!("\"{v}\""))
+            .collect::<Vec<_>>()
+            .join(",");
+        println!("cargo:rustc-check-cfg=cfg({name}, values({payload}))");
+    }
 }
 
 /// Activates conditional compilation for code behind `#[cfg(name = "value")]` or with `if cfg!(name
@@ -916,4 +922,46 @@ fn to_includes(headers: &[&str]) -> String {
     let mut vec = Vec::with_capacity(headers.len());
     vec.extend(headers.iter().copied().map(to_include));
     vec.join("\n")
+}
+
+/// Returns the `(Major, Minor, Patch)` version of the in-use `rustc` compiler.
+///
+/// Returns `None` in case of unexpected output format and panics in the event of runtime invariants
+/// being violated (i.e. non-executable RUSTC_WRAPPER, non-UTF-8 output, etc).
+fn rustc_version() -> Option<(u8, u8, u8)> {
+    use std::env;
+    use std::sync::OnceLock;
+
+    static RUSTC_VERSION: OnceLock<Option<(u8, u8, u8)>> = OnceLock::new();
+
+    RUSTC_VERSION
+        .get_or_init(|| -> Option<(u8, u8, u8)> {
+            let rustc = env::var_os("RUSTC").unwrap_or_else(|| OsString::from("rustc"));
+            let mut cmd = match env::var_os("RUSTC_WRAPPER").filter(|w| !w.is_empty()) {
+                Some(wrapper) => {
+                    let mut cmd = Command::new(wrapper);
+                    cmd.arg(rustc);
+                    cmd
+                }
+                None => Command::new(rustc),
+            };
+            let cmd = cmd.arg("--version");
+
+            let output = cmd.output().expect("Failed to execute rustc!");
+            let mut parts = std::str::from_utf8(&output.stdout)
+                .expect("Failed to parse `rustc --version` to UTF-8!")
+                .strip_prefix("rustc ")
+                // 1.80.0 or 1.80.0-nightly
+                .and_then(|output| output.split(|c| c == ' ' || c == '-').next())?
+                .split('.')
+                .map_while(|v| u8::from_str_radix(v, 10).ok());
+
+            Some((parts.next()?, parts.next()?, parts.next()?))
+        })
+        .clone()
+}
+
+#[test]
+fn rustc_version_test() {
+    assert!(matches!(rustc_version(), Some((_major, _minor, _patch))));
 }

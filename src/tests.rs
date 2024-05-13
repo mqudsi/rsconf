@@ -322,3 +322,9 @@ fn get_macro_value_recursive() {
         .expect("Failed to get initial macro value");
     assert_eq!(&definition, "BAR");
 }
+
+/// Verify that we get the RUSTC version ok as part of the declare_cfg() checks
+#[test]
+fn declare_cfg() {
+    rsconf::declare_cfg("foo", true);
+}
