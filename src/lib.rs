@@ -181,13 +181,23 @@ macro_rules! warn {
 /// features dynamically enabled via this script will not participate in dependency resolution.
 ///
 /// As of rust 1.80, features enabled in `build.rs` but not declared in `Cargo.toml` might trigger
-/// build-time warnings; consider using `enable_cfg()` instead if you are averse to declaring this
-/// feature publicly in `Cargo.toml`.
+/// build-time warnings; use [`declare_feature()`] instead to avoid this warning.
 pub fn enable_feature(name: &str) {
+    declare_feature(name, true)
+}
+
+/// Informs the compiler of a `feature` with the name `name`, enabled if `enabled` is set to `true`.
+///
+/// The feature does not have to be named in `Cargo.toml` to be used here or in your code, but any
+/// features dynamically enabled via this script will not participate in dependency resolution.
+pub fn declare_feature(name: &str, enabled: bool) {
     if name.chars().any(|c| c == '"') {
         panic!("Invalid feature name: {name}");
     }
-    println!("cargo:rustc-cfg=feature=\"{name}\"");
+    declare_cfg_values("feature", &[name]);
+    if enabled {
+        println!("cargo:rustc-cfg=feature=\"{name}\"");
+    }
 }
 
 /// Informs the compiler of a `cfg` with the name `name`, enabled if `enabled` is set to `true`.
