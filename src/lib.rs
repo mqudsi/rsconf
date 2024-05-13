@@ -213,6 +213,9 @@ pub fn declare_feature(name: &str, enabled: bool) {
 ///
 /// See also: [`declare_cfg_values()`].
 pub fn declare_cfg(name: &str, enabled: bool) {
+    if name.chars().any(|c| !c.is_ascii_alphanumeric()) {
+        panic!("Invalid cfg name {name}");
+    }
     println!("cargo:rustc-check-cfg=cfg({name})");
     if enabled {
         println!("cargo:rustc-cfg={name}");
@@ -238,11 +241,14 @@ pub fn enable_cfg(name: &str) {
 //     add_cfg("name").with_values(["a", "b", "c"])
 // followed by .enable() or .set_value("a")
 
-/// Inform the compiler of all known valid values for cfg `name`.
+/// Inform the compiler of a cfg with name `name` and all its known valid values.
 ///
 /// Call this before calling [`set_cfg_value()`] to avoid compiler warnings about unrecognized cfg
 /// values under rust 1.80+.
 pub fn declare_cfg_values(name: &str, values: &[&str]) {
+    if name.chars().any(|c| !c.is_ascii_alphanumeric()) {
+        panic!("Invalid cfg name {name}");
+    }
     let payload = values
         .iter()
         .inspect(|value| {
