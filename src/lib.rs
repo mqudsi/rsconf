@@ -186,7 +186,7 @@ pub fn enable_feature(name: &str) {
     declare_feature(name, true)
 }
 
-/// Informs the compiler of a `feature` with the name `name`, enabled if `enabled` is set to `true`.
+/// Informs the compiler of a `feature` with the name `name`, possibly enabled.
 ///
 /// The feature does not have to be named in `Cargo.toml` to be used here or in your code, but any
 /// features dynamically enabled via this script will not participate in dependency resolution.
@@ -200,15 +200,15 @@ pub fn declare_feature(name: &str, enabled: bool) {
     }
 }
 
-/// Informs the compiler of a `cfg` with the name `name`, enabled if `enabled` is set to `true`.
+/// Informs the compiler of a `cfg` with the name `name`, possibly enabled.
 ///
 /// Enables conditional compilation of code behind `#[cfg(name)]` or with `if cfg!(name)`
 /// (without quotes around `name`).
 ///
-/// As of rust 1.80, using `#[attr(cfg = "foo")]` when said feature is not enabled results in a
+/// As of rust 1.80, using `#[cfg(foo)]` when said feature is not enabled results in a
 /// compile-time warning as rust tries to protect against inadvertent use of invalid/unknown
 /// features. Unlike [`enable_cfg()`], this function informs `rustc` about the presence of a feature
-/// called `name` even when it's not enabled, so that `#[attr(not(cfg = "foo"))]` does not cause
+/// called `name` even when it's not enabled, so that `#[cfg(foo)]` or `#[cfg(not(foo))] do not
 /// cause warnings when the `foo` cfg is not enabled.
 ///
 /// See also: [`declare_cfg_values()`].
@@ -222,8 +222,10 @@ pub fn declare_cfg(name: &str, enabled: bool) {
     }
 }
 
-/// Enables conditional compilation of code behind `#[cfg(name)]` or with `if cfg!(name)`
-/// (without quotes around `name`).
+/// Enables Cargo/rustc feature with the name `name`.
+///
+/// Allows conditional compilation of code behind `#[cfg(name)]` or with `if cfg!(name)` (without
+/// quotes around `name`).
 ///
 /// See [`set_cfg_value()`] to set a `(name, value)` tuple to enable conditional compilation of the
 /// form `#[cfg(name = "value")]` for cases where `name` is not a boolean cfg but rather takes any
