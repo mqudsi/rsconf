@@ -213,11 +213,14 @@ pub fn declare_feature(name: &str, enabled: bool) {
 ///
 /// See also: [`declare_cfg_values()`].
 pub fn declare_cfg(name: &str, enabled: bool) {
-    if name.chars().any(|c| !c.is_ascii_alphanumeric()) {
+    if name.chars().any(|c| !c.is_ascii_alphanumeric() && c != '_') {
         panic!("Invalid cfg name {name}");
     }
     // Use #[cfg(version = "1.80.0")] when RFC 2523 finally lands
-    if rustc_version().map(|v| !v.cmp(&(1, 80, 0)).is_lt()).unwrap_or(true) {
+    if rustc_version()
+        .map(|v| !v.cmp(&(1, 80, 0)).is_lt())
+        .unwrap_or(true)
+    {
         println!("cargo:rustc-check-cfg=cfg({name})");
     }
     if enabled {
@@ -251,11 +254,14 @@ pub fn enable_cfg(name: &str) {
 /// Call this before calling [`set_cfg_value()`] to avoid compiler warnings about unrecognized cfg
 /// values under rust 1.80+.
 pub fn declare_cfg_values(name: &str, values: &[&str]) {
-    if name.chars().any(|c| !c.is_ascii_alphanumeric()) {
+    if name.chars().any(|c| !c.is_ascii_alphanumeric() && c != '_') {
         panic!("Invalid cfg name {name}");
     }
     // Use #[cfg(version = "1.80.0")] when RFC 2523 finally lands
-    if rustc_version().map(|v| !v.cmp(&(1, 80, 0)).is_lt()).unwrap_or(true) {
+    if rustc_version()
+        .map(|v| !v.cmp(&(1, 80, 0)).is_lt())
+        .unwrap_or(true)
+    {
         let payload = values
             .iter()
             .inspect(|value| {
@@ -897,7 +903,7 @@ impl From<cc::Build> for Target {
 
 /// Sanitizes a string for use in a file name
 fn fs_sanitize(s: &str) -> Cow<'_, str> {
-    if s.chars().all(|c| c.is_ascii_alphanumeric()) {
+    if s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
         return Cow::Borrowed(s);
     }
 
