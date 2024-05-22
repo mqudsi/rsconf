@@ -395,7 +395,7 @@ impl Target {
 
         let exe = mode == BuildMode::Executable;
         let link = exe || !libraries.is_empty();
-        let output = if cfg!(unix) || !self.is_cl {
+        let mut cmd = if cfg!(unix) || !self.is_cl {
             cmd.args([in_path.as_os_str(), OsStr::new("-o"), out_path.as_os_str()]);
             if !link {
                 cmd.arg("-c");
@@ -424,8 +424,13 @@ impl Target {
                 }
             }
             cmd
+        };
+
+        if self.verbose {
+            eprintln!("{:?}", cmd);
+            eprintln!("{}", code);
         }
-        .output()?;
+        let output = cmd.output()?;
 
         // We want to output text in verbose mode but writing directly to stdout doesn't get
         // intercepted by the cargo test harness. In test mode, we use the slower `println!()`/
