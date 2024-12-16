@@ -34,8 +34,8 @@ fn find_curses(system: &Target) -> bool {
         if !system.has_library(lib) {
             continue;
         }
-        if system.has_symbol("cur_term", lib)
-            && system.has_symbol("setupterm", lib)
+        if system.has_symbol_in("cur_term", lib)
+            && system.has_symbol_in("setupterm", lib)
         {
             // We found what we need, so make sure we link against it.
             rsconf::link_library(lib, LinkType::Default);
