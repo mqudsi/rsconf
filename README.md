@@ -80,7 +80,20 @@ fn setup_term() -> bool {
 }
 ```
 
-Note that there are actually [convenience methods](https://docs.rs/rsconf/latest/rsconf/) that significantly reduce the boilerplate above, but the more verbose api has been used for illustration purposes.
+Note that there are actually [convenience methods](https://docs.rs/rsconf/latest/rsconf/) that significantly reduce the boilerplate above, but the more verbose api has been used for illustration purposes; for example, `find_curses()` from above can be simplified as follows:
+
+```rust
+fn find_curses(system: &Target) -> bool {
+    // Check which of {tinfo, terminfo} contains both cur_term and setupterm
+    if let Some(lib) = system.find_first_library_with(
+        [ "tinfo", "terminfo" ], [ "cur_term", "setupterm" ]) {
+        // We found what we need, so make sure to link against it
+        rsconf::link_library(lib, LinkType::Default);
+        return true;
+    }
+    return false;
+}
+```
 
 ## License
 
