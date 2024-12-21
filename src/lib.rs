@@ -854,7 +854,7 @@ impl Target {
         );
         let mut result = None;
         let callback = |stdout: &str, stderr: &str| {
-            let buffer = if self.is_cl { &stdout } else { &stderr };
+            let buffer = if self.is_cl { stdout } else { stderr };
             if let Some(start) = buffer.find("EXFIL:::").map(|i| i + "EXFIL:::".len()) {
                 let start = std::str::from_utf8(&buffer.as_bytes()[start..]).unwrap();
                 let end = start
