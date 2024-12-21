@@ -945,31 +945,29 @@ fn rustc_version() -> Option<(u8, u8, u8)> {
 
     static RUSTC_VERSION: OnceLock<Option<(u8, u8, u8)>> = OnceLock::new();
 
-    RUSTC_VERSION
-        .get_or_init(|| -> Option<(u8, u8, u8)> {
-            let rustc = env::var_os("RUSTC").unwrap_or_else(|| OsString::from("rustc"));
-            let mut cmd = match env::var_os("RUSTC_WRAPPER").filter(|w| !w.is_empty()) {
-                Some(wrapper) => {
-                    let mut cmd = Command::new(wrapper);
-                    cmd.arg(rustc);
-                    cmd
-                }
-                None => Command::new(rustc),
-            };
-            let cmd = cmd.arg("--version");
+    *RUSTC_VERSION.get_or_init(|| -> Option<(u8, u8, u8)> {
+        let rustc = env::var_os("RUSTC").unwrap_or_else(|| OsString::from("rustc"));
+        let mut cmd = match env::var_os("RUSTC_WRAPPER").filter(|w| !w.is_empty()) {
+            Some(wrapper) => {
+                let mut cmd = Command::new(wrapper);
+                cmd.arg(rustc);
+                cmd
+            }
+            None => Command::new(rustc),
+        };
+        let cmd = cmd.arg("--version");
 
-            let output = cmd.output().expect("Failed to execute rustc!");
-            let mut parts = std::str::from_utf8(&output.stdout)
-                .expect("Failed to parse `rustc --version` to UTF-8!")
-                .strip_prefix("rustc ")
-                // 1.80.0 or 1.80.0-nightly
-                .and_then(|output| output.split(|c| c == ' ' || c == '-').next())?
-                .split('.')
-                .map_while(|v| u8::from_str_radix(v, 10).ok());
+        let output = cmd.output().expect("Failed to execute rustc!");
+        let mut parts = std::str::from_utf8(&output.stdout)
+            .expect("Failed to parse `rustc --version` as UTF-8!")
+            .strip_prefix("rustc ")
+            // 1.80.0 or 1.80.0-nightly
+            .and_then(|output| output.split([' ', '-']).next())?
+            .split('.')
+            .map_while(|v| v.parse::<u8>().ok());
 
-            Some((parts.next()?, parts.next()?, parts.next()?))
-        })
-        .clone()
+        Some((parts.next()?, parts.next()?, parts.next()?))
+    })
 }
 
 #[test]
