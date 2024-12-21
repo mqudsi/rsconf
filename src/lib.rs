@@ -218,7 +218,7 @@ pub fn declare_cfg(name: &str, enabled: bool) {
     }
     // Use #[cfg(version = "1.80.0")] when RFC 2523 finally lands
     if rustc_version()
-        .map(|v| !v.cmp(&(1, 80, 0)).is_lt())
+        .map(|v| v.cmp(&(1, 80, 0)).is_ge())
         .unwrap_or(true)
     {
         println!("cargo:rustc-check-cfg=cfg({name})");
@@ -259,7 +259,7 @@ pub fn declare_cfg_values(name: &str, values: &[&str]) {
     }
     // Use #[cfg(version = "1.80.0")] when RFC 2523 finally lands
     if rustc_version()
-        .map(|v| !v.cmp(&(1, 80, 0)).is_lt())
+        .map(|v| v.cmp(&(1, 80, 0)).is_ge())
         .unwrap_or(true)
     {
         let payload = values
