@@ -3,7 +3,9 @@
 [![crates.io](https://img.shields.io/crates/v/rsconf.svg)](https://crates.io/crates/rsconf)
 [![docs.rs](https://docs.rs/rsconf/badge.svg)](https://docs.rs/rsconf/latest/rsconf/)
 
-`rsconf` is a minimal, cross-platform build-time helper for testing a target system from a `build.rs` to unlock conditional compilation (via rustc's features or cfg flags) and link against the right system libraries, particularly for ffi purposes. Think of it as an autoconf replacement, but sane and intelligible.
+`rsconf` is a minimal (zero dependency), cross-platform build-time helper for testing a target system from a `build.rs` to unlock conditional compilation (via rustc's features or cfg flags) and link against the right system libraries, particularly for ffi purposes. Think of it as an autoconf replacement, but sane and intelligible.
+
+It also provides a simple api-based frontend for interacting with and influencing Cargo instead of relying on the somewhat brittle `println!("cargo::xxx-yyy=zzz")` interface to control various aspects of the build process and to set up the environment your crate will be built under.
 
 ## Usage
 
