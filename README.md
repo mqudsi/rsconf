@@ -7,6 +7,33 @@
 
 It also provides a simple api-based frontend for interacting with and influencing Cargo instead of relying on the somewhat brittle `println!("cargo::xxx-yyy=zzz")` interface to control various aspects of the build process and to set up the environment your crate will be built under.
 
+## Features
+
+Functionality for facilitating ffi and other system interop:
+
+* [X] Check for system libraries
+* [X] Check for symbols in libc or external libraries
+* [X] Check for system or 3rd party headers
+* [X] Check for specific types defined in system or external headers
+* [X] Test C `#ifdef` preprocessor defines at build-time
+* [X] Evaluate and test C `#if` preprocessor expressions at build-time
+* [X] Test linking against named library/libraries
+* [X] (Recursively) get value of `#define` macros
+* [X] Get values of compile-time constants (but see #3)
+
+We also expose a simple api to control how Cargo builds the crate:
+
+* [X] Add to the library search path
+* [X] Enable/disable named cfg features
+* [X] Link against an external library (optionally using an environment variable to influence how, specifically)
+* [X] Emit build-time warnings or errors
+* [X] Set cfg values for the crate
+* [X] Set build-time environment values for the crate
+* [X] Control when `build.rs` is rerun (when an environment variable is changed, when a path is changed, etc)
+* [X] Declare known features (and their known values) by the codebase (to avoid warnings about unrecognized features under rust 1.80+)
+* [ ] Builder-style api for declaring/enabling cfgs and values (under consideration)
+* [ ] Friendly api for dynamically declaring rust values instead of manually writing out rust code
+
 ## Usage
 
 `rsconf` is currently architectured as two separate components with [`rsconf::Target`](https://docs.rs/rsconf/latest/rsconf/struct.Target.html) being the primary means of testing the targeted system for the presence of libraries, symbols, system headers, types, and extracting compile-time constants; and the freestanding top-level functions in the `rsconf` crate's root namespace facilitating easier manipulation of Cargo and rustc (typically by wrapping the `println!("cargo:{...}")` messages [that influence how crates are built](https://rustwiki.org/en/cargo/reference/build-scripts.html)).
