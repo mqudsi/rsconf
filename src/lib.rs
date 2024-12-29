@@ -937,7 +937,7 @@ fn to_includes(headers: &[&str]) -> String {
 
 /// Returns the `(Major, Minor, Patch)` version of the in-use `rustc` compiler.
 ///
-/// Returns `None` in case of unexpected output format and panics in the event of runtime invariants
+/// Returns `None` in case of unexpected output format or in the event of runtime invariants
 /// being violated (i.e. non-executable RUSTC_WRAPPER, non-UTF-8 output, etc).
 fn rustc_version() -> Option<(u8, u8, u8)> {
     use std::env;
@@ -957,9 +957,15 @@ fn rustc_version() -> Option<(u8, u8, u8)> {
         };
         let cmd = cmd.arg("--version");
 
-        let output = cmd.output().expect("Failed to execute rustc!");
-        let mut parts = std::str::from_utf8(&output.stdout)
-            .expect("Failed to parse `rustc --version` as UTF-8!")
+        let Ok(output) = cmd.output() else {
+            warn!("Failed to execute rustc!");
+            return None;
+        };
+        let Ok(parts) = std::str::from_utf8(&output.stdout) else {
+            warn!("Failed to parse `rustc --version` output as UTF-8!");
+            return None;
+        };
+        let mut parts = parts
             .strip_prefix("rustc ")
             // 1.80.0 or 1.80.0-nightly
             .and_then(|output| output.split([' ', '-']).next())?
