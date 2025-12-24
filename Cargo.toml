@@ -1,11 +1,11 @@
 [package]
 name = "rsconf"
-version = "0.2.2"
+version = "0.3.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/mqudsi/rsconf/"
-description = "A sane autoconf for rust. build.rs helpers for testing for system headers, libraries, and symbols"
+description = "The missing cargo API. A sane autoconf w/ build.rs helpers for testing for system headers, libraries, and symbols"
 authors = [ "Mahmoud Al-Qudsi <mqudsi@neosmart.net>" ]
 keywords = [ "autoconf", "build-rs", "library-discovery", "build-tools" ]
 categories = [ "development-tools::build-utils", "development-tools::ffi", "os", "rust-patterns" ]
