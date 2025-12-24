@@ -60,11 +60,14 @@ The environment variables set by `cargo` when invoking `build.rs` or other crate
 | `CARGO_CFG_TARGET_ENV` | `Target::env()` |
 | `CARGO_CFG_TARGET_FAMILY` | `Target::family()` |
 | `CARGO_CFG_TARGET_FEATURE` | `Target::cpu_features()` |
+| `CARGO_CFG_TARGET_HAS_ATOMIC_EQUAL_ALIGNMENT`<sup>†</sup> | `Target::has_atomic_equal_alignment<T>()`<sup>†</sup> |
+| `CARGO_CFG_TARGET_HAS_ATOMIC_LOAD_STORE`<sup>†</sup> | `Target::has_atomic_load_store<T>()`<sup>†</sup> |
+| `CARGO_CFG_TARGET_HAS_ATOMIC` | `Target::has_atomic<T>()` |
 | `CARGO_CFG_TARGET_OS` | `Target::os()` |
 | `CARGO_CFG_TARGET_POINTER_WIDTH` | `Target::pointer_width()` |
 | `CARGO_CFG_TARGET_UNIX` | `Target::is_unix()` |
+| `CARGO_CFG_TARGET_VENDOR` | `Target::vendor()` |
 | `CARGO_CFG_TARGET_WINDOWS` | `Target::is_windows()` |
-| `CARGO_CFG_TARGET_vendor` | `Target::vendor()` |
 | `CARGO_ENCODED_RUSTFLAGS` | `rsconf::rustflags()` |
 | `DEBUG` | `rsconf::debug()` |
 | `HOST` | `rsconf::host_triple()` |
@@ -79,6 +82,14 @@ The environment variables set by `cargo` when invoking `build.rs` or other crate
 | `RUSTDOC` | `rsconf::rustdoc()` |
 | `RUSTFLAGS` | `rsconf::rustflags()` |
 | `TARGET` | `rsconf::target_triple()`, `Target::triple()` |
+
+<sup>†</sup> *indicates a nightly-only feature of the compiler with a corresponding api method only available when `rsconf` is compiled with the `nightly` feature.*
+
+## Crate features
+
+The `rsconf` crate has one optional feature (i.e. not enabled by default) at this time:
+
+* **nightly**: enables `Target::has_atomic_load_store<T>()` and `Target::has_atomic_equal_alignment<T>()`
 
 ## Usage example
 
