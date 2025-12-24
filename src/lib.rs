@@ -310,6 +310,33 @@ pub fn add_library_search_path(dir: &str) {
     println!("cargo:rustc-link-search={dir}");
 }
 
+/// Obtain the value corresponding to the `OUT_DIR` environment variable set by Cargo when when
+/// compiling `build.rs`.
+pub fn out_dir() -> std::path::PathBuf {
+    let path = std::env::var_os("OUT_DIR").expect("OUT_DIR is missing!");
+    std::path::PathBuf::from(path)
+}
+
+/// Obtain the value corresponding to the `TARGET` environment variable set by Cargo when when
+/// compiling `build.rs`.
+pub fn target_triple() -> String {
+    std::env::var("TARGET").expect("Missing or invalid TARGET env variable!")
+}
+
+/// Obtain the value corresponding to the `HOST` environment variable set by Cargo when when
+/// compiling `build.rs`.
+pub fn host_triple() -> String {
+    std::env::var("HOST").expect("Missing or invalid HOST env variable!")
+}
+
+/// Obtain the value corresponding to the `NUM_JOBS` environment variable set by Cargo when when
+/// compiling `build.rs`.
+pub fn num_jobs() -> Option<usize> {
+    std::env::var("NUM_JOBS")
+        .ok()
+        .map(|n| n.parse::<usize>().expect(&format!("Invalid NUM_JOBS: {n}")))
+}
+
 impl Target {
     const NONE: &'static [&'static str] = &[];
     #[inline(always)]
@@ -897,6 +924,93 @@ impl Target {
             };
         }
         Ok(result)
+    }
+}
+
+// Implementations of CARGO_CFG_TARGET_XXX that provide parsed values
+impl Target {
+    /// Whether or not `CARGO_CFG_TARGET_UNIX` environment variable is defined by Cargo when
+    /// compiling `build.rs`.
+    pub fn is_unix() -> bool {
+        std::env::var_os("CARGO_CFG_UNIX").is_some()
+    }
+
+    /// Whether or not `CARGO_CFG_TARGET_WINDOWS` environment variable is defined by Cargo when
+    /// compiling `build.rs`.
+    pub fn is_windows() -> bool {
+        std::env::var_os("CARGO_CFG_WINDOWS").is_some()
+    }
+
+    /// The values in the `CARGO_CFG_TARGET_FAMILY` environment variable defined by Cargo when
+    /// compiling `build.rs`.
+    pub fn family() -> Vec<String> {
+        let families =
+            std::env::var("CARGO_CFG_TARGET_FAMILY").expect("CARGO_CFG_TARGET_FAMILY not found!");
+
+        if families.contains(',') {
+            families.split(',').map(From::from).collect()
+        } else {
+            vec![families]
+        }
+    }
+
+    /// The value of the `CARGO_CFG_TARGET_OS` environment variable set by Cargo when compiling
+    /// `build.rs`.
+    pub fn os() -> String {
+        std::env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS not found!")
+    }
+
+    /// The value of the `CARGO_CFG_TARGET_ARCH` environment variable set by Cargo when compiling
+    /// `build.rs`.
+    pub fn arch() -> String {
+        std::env::var("CARGO_CFG_TARGET_ARCH").expect("CARGO_CFG_TARGET_ARCH not found!")
+    }
+
+    /// The value of the `CARGO_CFG_TARGET_VENDOR` environment variable set by Cargo when compiling
+    /// `build.rs`.
+    pub fn vendor() -> String {
+        std::env::var("CARGO_CFG_TARGET_VENDOR").expect("CARGO_CFG_TARGET_VENDOR not found!")
+    }
+
+    /// The value of the `CARGO_CFG_TARGET_ENV` environment variable set by Cargo when compiling
+    /// `build.rs`.
+    pub fn env() -> String {
+        std::env::var("CARGO_CFG_TARGET_ENV").expect("CARGO_CFG_TARGET_ENV not found!")
+    }
+
+    /// The value of the `CARGO_CFG_TARGET_ABI` environment variable set by Cargo when compiling
+    /// `build.rs`.
+    pub fn abi() -> String {
+        std::env::var("CARGO_CFG_TARGET_ABI").expect("CARGO_CFG_TARGET_ABI not found!")
+    }
+
+    /// The value of the `CARGO_CFG_TARGET_ENV` environment variable set by Cargo when compiling
+    /// `build.rs`.
+    #[inline(always)]
+    pub fn triple() -> String {
+        crate::target_triple()
+    }
+
+    /// The value of the `CARGO_CFG_TARGET_POINTER_WIDTH` environment variable set by Cargo when
+    /// compiling `build.rs`.
+    pub fn pointer_width() -> usize {
+        std::env::var("CARGO_CFG_TARGET_POINTER_WIDTH")
+            .expect("CARGO_CFG_TARGET_POINTER_WIDTH not found!")
+            .parse()
+            .expect("Invalid CARGO_CFG_TARGET_POINTER_WIDTH!")
+    }
+
+    /// The value of the `CARGO_CFG_TARGET_POINTER_ENDIAN` environment variable set by Cargo when
+    /// compiling `build.rs`.
+    pub fn endian() -> String {
+        std::env::var("CARGO_CFG_TARGET_ENDIAN").expect("CARGO_CFG_TARGET_ENDIAN not found!")
+    }
+
+    /// The values in the `CARGO_CFG_TARGET_FEATURE` environment variable defined by Cargo when
+    /// compiling `build.rs`.
+    pub fn feature() -> Vec<String> {
+        let features = std::env::var("CARGO_CFG_TARGET_FEATURE").unwrap_or(String::new());
+        features.split(',').map(From::from).collect()
     }
 }
 

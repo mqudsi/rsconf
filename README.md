@@ -48,6 +48,28 @@ Special care is taken to distinguish features that are compatible with cross-com
 
 At this time, `rsconf` does not expose any functionality for package discovery (as opposed to searching for headers and libraries in either the default system paths or those search paths that the `cc::Build` instance was configured with then passed to `Target::new_from()`. If you need that functionality you are encouraged to use a crate such as [`pkg_config`](https://docs.rs/pkg-config/latest/pkg_config/) to find the path to the library or header files and then configure the `cc::Build` instance with those paths before passing it in to `Target::new_from()`.
 
+## Exposed/mapped environment variables
+
+The environment variables set by `cargo` when invoking `build.rs` or other crate build scripts have been mapped to the following wrapper functions:
+
+| Environment variable | Equivalent function |
+| :--- | :--- |
+| `OUT_DIR` | `rsconf::out_dir()` |
+| `TARGET` | `rsconf::target_triple()`, `Target::triple()` |
+| `HOST` | `rsconf::host_triple()` |
+| `NUM_JOBS` | `rsconf::num_jobs()` |
+| `CARGO_CFG_TARGET_UNIX` | `Target::is_unix()` |
+| `CARGO_CFG_TARGET_WINDOWS` | `Target::is_windows()` |
+| `CARGO_CFG_TARGET_FAMILY` | `Target::family()` |
+| `CARGO_CFG_TARGET_OS` | `Target::os()` |
+| `CARGO_CFG_TARGET_ARCH` | `Target::arch()` |
+| `CARGO_CFG_TARGET_vendor` | `Target::vendor()` |
+| `CARGO_CFG_TARGET_ENV` | `Target::env()` |
+| `CARGO_CFG_TARGET_ABI` | `Target::abi()` |
+| `CARGO_CFG_TARGET_POINTER_WIDTH` | `Target::pointer_width()` |
+| `CARGO_CFG_TARGET_ENDIAN` | `Target::endian()` |
+| `CARGO_CFG_TARGET_FEATURE` | `Target::feature()` |
+
 ## Usage example
 
 Here's an example of how to check for a symbol in multiple libraries in your `build.rs` build script with `rsconf`, then use that information from your crate to conditionally compile code. Here we'll test for a low-level curses library and verify that the one we found has the symbols we need before using those from rust.
