@@ -16,6 +16,8 @@ mod tempdir;
 #[cfg(test)]
 mod tests;
 
+use sealed::CompilerAtomic;
+
 use cc::Build;
 use std::borrow::Cow;
 use std::ffi::{OsStr, OsString};
@@ -1154,6 +1156,85 @@ impl Target {
         }
     }
 }
+
+/// Interprets whether or not a primitive type [ui][8,16,32,64,128,size] is covered by the atomic
+/// environment variable in question.
+fn parse_atomic<T>(var: &'static str) -> bool {
+    let value = std::env::var(var).unwrap_or_default();
+    let mut atomics = value.split(',');
+
+    // Cheaper than converting the size into a string at runtime
+    let tname = std::any::type_name::<T>();
+    if tname.ends_with("size") {
+        atomics.find(|&x| x == "ptr").is_some()
+    } else {
+        let num = tname.strip_prefix(['u', 'i']).unwrap();
+        atomics.find(|&x| x == num).is_some()
+    }
+}
+
+impl Target {
+    /// Determines whether or not the target has atomic support for reads and writes of this type.
+    ///
+    /// Implemented for the primitive signed/unsigned integer types, e.g. `Target::has_atomic::<u64>()`.
+    pub fn has_atomic<T: CompilerAtomic>() -> bool {
+        T::has_atomic()
+    }
+
+    /// Indicates whether an `AtomicX` has the same alignment as the equivalent `X` integer type.
+    ///
+    /// Implemented for the primitive signed/unsigned integer types, e.g. `Target::has_atomic_equal_alignment::<usize>()`.
+    ///
+    /// Not available on the stable toolchain. See tracking [issue #93822](https://github.com/rust-lang/rust/issues/93822).
+    #[cfg(feature = "nightly")]
+    pub fn has_atomic_equal_alignment<T: CompilerAtomic>() -> bool {
+        T::has_atomic_equal_alignment()
+    }
+
+    /// Indicates whether a target has atomic load/store support for the provided signed/unsigned integer type.
+    ///
+    /// Implemented for the primitive signed/unsigned integer types, e.g. `Target::has_atomic_load_store::<i32>()`.
+    ///
+    /// Not available on the stable toolchain. See tracking [issue #94039](https://github.com/rust-lang/rust/issues/94039).
+    #[cfg(feature = "nightly")]
+    pub fn has_atomic_load_store<T: CompilerAtomic>() -> bool {
+        T::has_atomic_load_store()
+    }
+}
+
+mod sealed {
+    use super::parse_atomic;
+
+    pub trait CompilerAtomic: Sized {
+        fn has_atomic() -> bool {
+            parse_atomic::<Self>("CARGO_CFG_TARGET_HAS_ATOMIC")
+        }
+
+        #[cfg(feature = "nightly")]
+        fn has_atomic_equal_alignment() -> bool {
+            parse_atomic::<Self>("CARGO_CFG_TARGET_HAS_ATOMIC_EQUAL_ALIGNMENT")
+        }
+
+        #[cfg(feature = "nightly")]
+        fn has_atomic_load_store() -> bool {
+            parse_atomic::<Self>("CARGO_CFG_TARGET_HAS_ATOMIC_LOAD_STORE")
+        }
+    }
+}
+
+impl CompilerAtomic for u8 {}
+impl CompilerAtomic for u16 {}
+impl CompilerAtomic for u32 {}
+impl CompilerAtomic for u64 {}
+impl CompilerAtomic for u128 {}
+impl CompilerAtomic for usize {}
+
+impl CompilerAtomic for i8 {}
+impl CompilerAtomic for i16 {}
+impl CompilerAtomic for i32 {}
+impl CompilerAtomic for i64 {}
+impl CompilerAtomic for i128 {}
+impl CompilerAtomic for isize {}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Endian {

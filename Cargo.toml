@@ -11,6 +11,10 @@ keywords = [ "autoconf", "build-rs", "library-discovery", "build-tools" ]
 categories = [ "development-tools::build-utils", "development-tools::ffi", "os", "rust-patterns" ]
 build = "build.rs"
 
+[features]
+default = []
+nightly = []
+
 [dependencies]
 # cc = { git = "https://github.com/mqudsi/cc-rs.git", branch = "fish" }
 cc = "1.0.69"
