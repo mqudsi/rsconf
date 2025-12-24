@@ -1,5 +1,5 @@
 use crate as rsconf;
-use crate::Target;
+use crate::{shell_split, Target};
 use once_cell::sync::Lazy;
 
 static CC: Lazy<cc::Build> = Lazy::new(|| {
@@ -327,4 +327,56 @@ fn get_macro_value_recursive() {
 #[test]
 fn declare_cfg() {
     rsconf::declare_cfg("foo", true);
+}
+
+#[test]
+fn shell_split_basic() {
+    let input = "--crate-type bin -g";
+    let expected = vec!["--crate-type", "bin", "-g"];
+    assert_eq!(shell_split(input), expected);
+}
+
+#[test]
+fn shell_split_multiple_spaces() {
+    let input = "  foo    bar   ";
+    let expected = vec!["foo", "bar"];
+    assert_eq!(shell_split(input), expected);
+}
+
+#[test]
+fn shell_split_single_quotes() {
+    // Spaces inside single quotes should be preserved
+    let input = "'-C' 'target-cpu=native' 'space here'";
+    let expected = vec!["-C", "target-cpu=native", "space here"];
+    assert_eq!(shell_split(input), expected);
+}
+
+#[test]
+fn shell_split_double_quotes() {
+    // Spaces inside double quotes should be preserved
+    let input = "-L \"/home/user/path with spaces\" --verbose";
+    let expected = vec!["-L", "/home/user/path with spaces", "--verbose"];
+    assert_eq!(shell_split(input), expected);
+}
+
+#[test]
+fn shell_split_escaped_characters() {
+    // Escaped spaces should not trigger a split
+    let input = "path\\ with\\ spaces next_arg";
+    let expected = vec!["path with spaces", "next_arg"];
+    assert_eq!(shell_split(input), expected);
+}
+
+#[test]
+fn shell_split_mixed_quotes() {
+    // Quotes inside different quotes
+    let input = "-C link-arg=\"-Wl,-rpath,'$ORIGIN'\"";
+    let expected = vec!["-C", "link-arg=-Wl,-rpath,'$ORIGIN'"];
+    assert_eq!(shell_split(input), expected);
+}
+
+#[test]
+fn shell_split_empty() {
+    assert_eq!(shell_split(""), Vec::<String>::new());
+    assert_eq!(shell_split("   "), Vec::<String>::new());
 }

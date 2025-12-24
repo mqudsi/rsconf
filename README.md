@@ -54,21 +54,31 @@ The environment variables set by `cargo` when invoking `build.rs` or other crate
 
 | Environment variable | Equivalent function |
 | :--- | :--- |
-| `OUT_DIR` | `rsconf::out_dir()` |
-| `TARGET` | `rsconf::target_triple()`, `Target::triple()` |
-| `HOST` | `rsconf::host_triple()` |
-| `NUM_JOBS` | `rsconf::num_jobs()` |
+| `CARGO_CFG_TARGET_ABI` | `Target::abi()` |
+| `CARGO_CFG_TARGET_ARCH` | `Target::arch()` |
+| `CARGO_CFG_TARGET_ENDIAN` | `Target::endian()` |
+| `CARGO_CFG_TARGET_ENV` | `Target::env()` |
+| `CARGO_CFG_TARGET_FAMILY` | `Target::family()` |
+| `CARGO_CFG_TARGET_FEATURE` | `Target::cpu_features()` |
+| `CARGO_CFG_TARGET_OS` | `Target::os()` |
+| `CARGO_CFG_TARGET_POINTER_WIDTH` | `Target::pointer_width()` |
 | `CARGO_CFG_TARGET_UNIX` | `Target::is_unix()` |
 | `CARGO_CFG_TARGET_WINDOWS` | `Target::is_windows()` |
-| `CARGO_CFG_TARGET_FAMILY` | `Target::family()` |
-| `CARGO_CFG_TARGET_OS` | `Target::os()` |
-| `CARGO_CFG_TARGET_ARCH` | `Target::arch()` |
 | `CARGO_CFG_TARGET_vendor` | `Target::vendor()` |
-| `CARGO_CFG_TARGET_ENV` | `Target::env()` |
-| `CARGO_CFG_TARGET_ABI` | `Target::abi()` |
-| `CARGO_CFG_TARGET_POINTER_WIDTH` | `Target::pointer_width()` |
-| `CARGO_CFG_TARGET_ENDIAN` | `Target::endian()` |
-| `CARGO_CFG_TARGET_FEATURE` | `Target::feature()` |
+| `CARGO_ENCODED_RUSTFLAGS` | `rsconf::rustflags()` |
+| `DEBUG` | `rsconf::debug()` |
+| `HOST` | `rsconf::host_triple()` |
+| `NUM_JOBS` | `rsconf::num_jobs()` |
+| `OPT_LEVEL` | `rsconf::opt_level()` |
+| `OUT_DIR` | `rsconf::out_dir()` |
+| `PROFILE` | `rsconf::profile()` |
+| `RUSTC_LINKER` | `rsconf::rustc_linker()` |
+| `RUSTC_WORKSPACE_WRAPPER` | `rsconf::rustc_workspace_wrapper()` |
+| `RUSTC_WRAPPER` | `rsconf::rustc_wrapper()` |
+| `RUSTC` | `rsconf::rustc()` |
+| `RUSTDOC` | `rsconf::rustdoc()` |
+| `RUSTFLAGS` | `rsconf::rustflags()` |
+| `TARGET` | `rsconf::target_triple()`, `Target::triple()` |
 
 ## Usage example
 

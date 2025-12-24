@@ -310,26 +310,149 @@ pub fn add_library_search_path(dir: &str) {
     println!("cargo:rustc-link-search={dir}");
 }
 
-/// Obtain the value corresponding to the `OUT_DIR` environment variable set by Cargo when when
+/// The output directory in which all output and intermediate artifacts should be placed.
+///
+/// This folder is inside the build directory for the package being built, and it is unique for the
+/// package in question. Corresponds to the `OUT_DIR` environment variable set by Cargo when when
 /// compiling `build.rs`.
 pub fn out_dir() -> std::path::PathBuf {
     let path = std::env::var_os("OUT_DIR").expect("OUT_DIR is missing!");
     std::path::PathBuf::from(path)
 }
 
-/// Obtain the value corresponding to the `TARGET` environment variable set by Cargo when when
-/// compiling `build.rs`.
+/// The rustc/llvm triple of the target hardware/os/toolchain.
+///
+/// Differs from [`host_triple()`] when cross-compiling and corresponds to the `TARGET` environment
+/// variable set by Cargo when when compiling `build.rs`.
 pub fn target_triple() -> String {
     std::env::var("TARGET").expect("Missing or invalid TARGET env variable!")
 }
 
-/// Obtain the value corresponding to the `HOST` environment variable set by Cargo when when
-/// compiling `build.rs`.
+/// The rustc/llvm triple of the host hardware/os/toolchain.
+///
+/// Differs from [`target_triple()`] when cross-compiling and corresponds to the `HOST` environment
+/// variable set by Cargo when when compiling `build.rs`.
 pub fn host_triple() -> String {
     std::env::var("HOST").expect("Missing or invalid HOST env variable!")
 }
 
-/// Obtain the value corresponding to the `NUM_JOBS` environment variable set by Cargo when when
+/// The optimization level specified for the build profile specified/being compiled.
+///
+/// Corresponds to the `OPT_LEVEL` environment variable set by Cargo when when compiling `build.rs`.
+pub fn opt_level() -> String {
+    std::env::var("OPT_LEVEL").expect("Missing or invalid OPT_LEVEL env variable!")
+}
+
+/// Whether or not debug assertions are enabled.
+///
+/// Corresponds to the `DEBUG` environment variable set by Cargo when when compiling `build.rs`.
+pub fn debug() -> bool {
+    match std::env::var("DEBUG").as_ref().map(|s| s.as_str()) {
+        Ok("true") => true,
+        _ => false,
+    }
+}
+
+/// The selected build profile, e.g. `release`, `debug`, or a custom profile as defined in
+/// `Cargo.toml`.
+///
+/// Corresponds to the `DEBUG` environment variable set by Cargo when when compiling `build.rs`.
+pub fn profile() -> String {
+    std::env::var("PROFILE").expect("Missing or invalid PROFILE env variable!")
+}
+
+/// The path to the `rustc` compiler being used.
+///
+/// Corresponds to the `RUSTC` environment variable set by Cargo when compiling `build.rs`.
+pub fn rustc() -> PathBuf {
+    let rustc = std::env::var_os("RUSTC").expect("Missing RUSTC environment variable!");
+    PathBuf::from(rustc)
+}
+
+/// The path to the `rustdoc` compiler being used.
+///
+/// Corresponds to the `RUSTDOC` environment variable set by Cargo when compiling `build.rs`.
+pub fn rustdoc() -> PathBuf {
+    let rustdoc = std::env::var_os("RUSTDOC").expect("Missing RUSTDOC environment variable!");
+    PathBuf::from(rustdoc)
+}
+
+/// The `rustc` wrapper configured with the `RUSTC_WRAPPER` environment variable, if any.
+///
+/// Note that this may be a fully qualified path or an executable in `PATH`.
+pub fn rustc_wrapper() -> Option<PathBuf> {
+    std::env::var_os("RUSTC_WRAPPER").map(PathBuf::from)
+}
+
+/// The `rustc` wrapper used for the workspace, if any.
+///
+/// Note that this may be a fully qualified path or an executable in `PATH`.
+pub fn rustc_workspace_wrapper() -> Option<PathBuf> {
+    std::env::var_os("RUSTC_WORKSPACE_WRAPPER").map(PathBuf::from)
+}
+
+/// The path to the linker `cargo` has been configured to use for the current target, if any.
+///
+/// Corresponds to the `RUSTC_LINKER` environment variable set by Cargo when compiling `build.rs`.
+pub fn rustc_linker() -> Option<PathBuf> {
+    std::env::var_os("RUSTC_LINKER").map(PathBuf::from)
+}
+
+/// All the extra flags `rustc` will ultimately be invoked with.
+///
+/// Corresponds to the `CARGO_ENCODED_RUSTFLAGS` environment variable set by Cargo when compiling
+/// `build.rs` on newer toolchain versions, and `RUSTFLAGS` for older ones, making a best-effort
+/// attempt at parsing any un-encoded quotes in `RUSTFLAGS` to account for the difference.
+pub fn rustflags() -> Vec<String> {
+    if let Ok(flags) = std::env::var("CARGO_ENCODED_RUSTFLAGS") {
+        // Flags can be specified in a myriad of different ways, CARGO_ENCODED_RUSTFLAGS has them
+        // normalized into KEY=VALUE notation separated by the ASCII record separator (0x1F).
+        flags.split('\x1f').map(From::from).collect()
+    } else if let Ok(flags) = std::env::var("RUSTFLAGS") {
+        shell_split(&flags)
+    } else {
+        Vec::new()
+    }
+}
+
+/// Splits a string on spaces, respecting single and double quotes.
+/// Not perfect, but good enough.
+fn shell_split(s: &str) -> Vec<String> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut chars = s.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        match c {
+            '\'' if !in_double => in_single = !in_single,
+            '"' if !in_single => in_double = !in_double,
+            ' ' if !in_single && !in_double => {
+                if !current.is_empty() {
+                    args.push(current.clone());
+                    current.clear();
+                }
+            }
+            // Basic escape character support
+            '\\' if !in_single => {
+                if let Some(&next) = chars.peek() {
+                    current.push(next);
+                    chars.next();
+                }
+            }
+            _ => current.push(c),
+        }
+    }
+    if !current.is_empty() {
+        args.push(current);
+    }
+    args
+}
+
+/// The specified degree of build parallelism, defaulting to the host's thread count.
+///
+/// Obtain the value corresponding to the `NUM_JOBS` environment variable set by Cargo when
 /// compiling `build.rs`.
 pub fn num_jobs() -> Option<usize> {
     std::env::var("NUM_JOBS")
@@ -941,6 +1064,15 @@ impl Target {
         std::env::var_os("CARGO_CFG_WINDOWS").is_some()
     }
 
+    /// Compiler features supported by the target's CPU.
+    ///
+    /// The values in the `CARGO_CFG_TARGET_FEATURE` environment variable defined by Cargo when
+    /// compiling `build.rs`.
+    pub fn cpu_features() -> Vec<String> {
+        let features = std::env::var("CARGO_CFG_TARGET_FEATURE").unwrap_or(String::new());
+        features.split(',').map(From::from).collect()
+    }
+
     /// The values in the `CARGO_CFG_TARGET_FAMILY` environment variable defined by Cargo when
     /// compiling `build.rs`.
     pub fn family() -> Vec<String> {
@@ -984,13 +1116,19 @@ impl Target {
         std::env::var("CARGO_CFG_TARGET_ABI").expect("CARGO_CFG_TARGET_ABI not found!")
     }
 
-    /// The value of the `CARGO_CFG_TARGET_ENV` environment variable set by Cargo when compiling
-    /// `build.rs`.
+    /// The rustc/llvm triple of the target hardware/os/toolchain.
+    ///
+    /// An alias for [`rsconf::target_triple()`](crate::target_triple). Differs from
+    /// [`host_triple()`] when cross-compiling and corresponds to the `TARGET` environment variable
+    /// set by Cargo when when compiling `build.rs`.
     #[inline(always)]
     pub fn triple() -> String {
         crate::target_triple()
     }
 
+    /// The width of a pointer in bits, e.g. `32` on x86 systems and `64` on x86_64 or aarch64
+    /// systems when targeting the native architecture.
+    ///
     /// The value of the `CARGO_CFG_TARGET_POINTER_WIDTH` environment variable set by Cargo when
     /// compiling `build.rs`.
     pub fn pointer_width() -> usize {
@@ -1000,6 +1138,9 @@ impl Target {
             .expect("Invalid CARGO_CFG_TARGET_POINTER_WIDTH!")
     }
 
+    /// Whether the target is a [little Endian](Endian::Little) or [big Endian](Endian::Big)
+    /// architecture.
+    ///
     /// The value of the `CARGO_CFG_TARGET_POINTER_ENDIAN` environment variable set by Cargo when
     /// compiling `build.rs`.
     pub fn endian() -> Endian {
@@ -1011,13 +1152,6 @@ impl Target {
             "big" => Endian::Big,
             other => panic!("Unexpected CARGO_CFG_TARGET_ENDIAN value {other}"),
         }
-    }
-
-    /// The values in the `CARGO_CFG_TARGET_FEATURE` environment variable defined by Cargo when
-    /// compiling `build.rs`.
-    pub fn feature() -> Vec<String> {
-        let features = std::env::var("CARGO_CFG_TARGET_FEATURE").unwrap_or(String::new());
-        features.split(',').map(From::from).collect()
     }
 }
 
