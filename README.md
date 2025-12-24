@@ -1,4 +1,4 @@
-# rsconf
+# rsconf: the missing cargo crate
 
 [![crates.io](https://img.shields.io/crates/v/rsconf.svg)](https://crates.io/crates/rsconf)
 [![docs.rs](https://docs.rs/rsconf/badge.svg)](https://docs.rs/rsconf/latest/rsconf/)
