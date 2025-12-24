@@ -1002,8 +1002,15 @@ impl Target {
 
     /// The value of the `CARGO_CFG_TARGET_POINTER_ENDIAN` environment variable set by Cargo when
     /// compiling `build.rs`.
-    pub fn endian() -> String {
-        std::env::var("CARGO_CFG_TARGET_ENDIAN").expect("CARGO_CFG_TARGET_ENDIAN not found!")
+    pub fn endian() -> Endian {
+        match std::env::var("CARGO_CFG_TARGET_ENDIAN")
+            .expect("CARGO_CFG_TARGET_ENDIAN not found!")
+            .as_str()
+        {
+            "little" => Endian::Little,
+            "big" => Endian::Big,
+            other => panic!("Unexpected CARGO_CFG_TARGET_ENDIAN value {other}"),
+        }
     }
 
     /// The values in the `CARGO_CFG_TARGET_FEATURE` environment variable defined by Cargo when
@@ -1011,6 +1018,24 @@ impl Target {
     pub fn feature() -> Vec<String> {
         let features = std::env::var("CARGO_CFG_TARGET_FEATURE").unwrap_or(String::new());
         features.split(',').map(From::from).collect()
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Endian {
+    Little,
+    Big,
+}
+
+impl Endian {
+    /// Whether or not the value is [`Endian::Little`]
+    pub fn is_little(&self) -> bool {
+        matches!(self, Self::Little)
+    }
+
+    /// Whether or not the value is [`Endian::Big`]
+    pub fn is_big(&self) -> bool {
+        matches!(self, Self::Big)
     }
 }
 
