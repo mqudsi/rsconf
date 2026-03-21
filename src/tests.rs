@@ -147,6 +147,36 @@ fn if_false() {
 }
 
 #[test]
+fn ifdef_glibc() {
+    let target = target();
+    let result = target.r#ifdef("__GLIBC__", &[]);
+    #[cfg(all(target_env = "gnu"))]
+    assert_eq!(result, true);
+    #[cfg(not(target_env = "gnu"))]
+    assert_eq!(result, false);
+}
+
+#[test]
+fn ifdef_linux() {
+    let target = target();
+    let result = target.r#ifdef("__linux__", &[]);
+    #[cfg(all(target_os = "linux"))]
+    assert_eq!(result, true);
+    #[cfg(not(target_os = "linux"))]
+    assert_eq!(result, false);
+}
+
+#[test]
+fn ifdef_win32() {
+    let target = target();
+    let result = target.r#ifdef("_WIN32", &[]);
+    #[cfg(all(target_os = "windows"))]
+    assert_eq!(result, true);
+    #[cfg(not(target_os = "windows"))]
+    assert_eq!(result, false);
+}
+
+#[test]
 fn not_if() {
     let target = target();
     let result = target.r#if("__FOOO_BAR_12_", &[]);
